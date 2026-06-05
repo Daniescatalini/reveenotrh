@@ -3582,8 +3582,8 @@ function LoginScreen({
   onResetPassword: (email: string) => Promise<{ ok: boolean; error?: string; message?: string }>;
 }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [fullName, setFullName] = useState("Daniela Escatalini");
-  const [email, setEmail] = useState("daniela@reveenorth.com");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
