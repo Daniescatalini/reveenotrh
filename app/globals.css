@@ -1,0 +1,343 @@
+@import "tailwindcss";
+
+:root {
+  --background: #efefef;
+  --foreground: #211d19;
+  --accent: #d75c27;
+  --muted: #756b62;
+  --panel: rgba(255, 255, 255, 0.65);
+  --panel-strong: rgba(255, 255, 255, 0.82);
+  --line: rgba(255, 255, 255, 0.35);
+  --shadow: 0 22px 70px rgba(33, 29, 25, 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.46);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100svh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(215, 92, 39, 0.18), transparent 28rem),
+    radial-gradient(circle at 88% 18%, rgba(33, 29, 25, 0.1), transparent 24rem),
+    radial-gradient(circle at 82% 92%, rgba(215, 92, 39, 0.12), transparent 28rem),
+    linear-gradient(135deg, #f8f6f2 0%, var(--background) 48%, #e6dfd7 100%);
+  color: var(--foreground);
+  font-family: Montserrat, "Montserrat", Arial, sans-serif;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.28;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,.32) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 70%, rgba(33,29,25,.16) 0 1px, transparent 1px);
+  background-size: 34px 34px, 46px 46px;
+  mix-blend-mode: soft-light;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+.dark,
+body.dark {
+  --background: #050505;
+  --foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.68);
+  --panel: rgba(8, 8, 8, 0.9);
+  --panel-strong: rgba(5, 5, 5, 0.96);
+  --line: rgba(255, 255, 255, 0.1);
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.54), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(circle at top right, rgba(215, 92, 39, 0.16), transparent 34rem),
+    linear-gradient(135deg, #050505 0%, #080706 48%, #0c0908 100%);
+}
+
+body:has(main.dark) {
+  background: #050505 !important;
+  color: #ffffff !important;
+}
+
+body:has(main.dark)::before {
+  opacity: 0.04;
+  mix-blend-mode: normal;
+}
+
+main.dark,
+.dark .app-shell {
+  background: #050505 !important;
+  color: #ffffff !important;
+}
+
+.dark .glass,
+.dark .glass-strong {
+  background: rgba(5, 5, 5, 0.94) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.dark [class*="bg-white"]:not(.north-coach-gradient):not(.coach-plain-button),
+.dark [class*="bg-[#f5"]:not(.north-coach-gradient),
+.dark [class*="bg-[#f7"]:not(.north-coach-gradient),
+.dark [class*="bg-[#efefef]"]:not(.north-coach-gradient),
+.dark [class*="bg-\\[\\#f5"]:not(.north-coach-gradient),
+.dark [class*="bg-\\[\\#f7"]:not(.north-coach-gradient),
+.dark [class*="bg-\\[\\#efefef"]:not(.north-coach-gradient) {
+  background-color: #050505 !important;
+  background-image: none !important;
+}
+
+.dark [class*="text-[#211d19]"],
+.dark [class*="text-\\[\\#211d19\\]"],
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark p,
+.dark label,
+.dark span {
+  color: #ffffff !important;
+}
+
+.dark .text-\[\#d75c27\],
+.dark [class*="text-[#d75c27]"],
+.dark [class*="text-\\[\\#d75c27\\]"] {
+  color: #d75c27 !important;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #050505 !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark option {
+  background: #050505;
+  color: #ffffff;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.dark .app-page-header,
+.dark .app-top-control,
+.dark .app-dark-surface {
+  background: #050505 !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.dark .app-popover,
+.dark .app-modal-panel,
+.dark .app-modal-inner {
+  background: #050505 !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.dark .app-muted-surface {
+  background: #080808 !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.glass {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(24px) saturate(1.16);
+  -webkit-backdrop-filter: blur(24px) saturate(1.16);
+}
+
+.glass-strong {
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(28px) saturate(1.18);
+  -webkit-backdrop-filter: blur(28px) saturate(1.18);
+}
+
+.warm-gradient {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(215, 92, 39, 0.42), transparent 18rem),
+    radial-gradient(circle at 18% 80%, rgba(255, 255, 255, 0.08), transparent 14rem),
+    linear-gradient(135deg, #211d19 0%, #3b251c 52%, #d75c27 145%);
+}
+
+.warm-gradient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.16;
+  background-image: radial-gradient(circle, rgba(255,255,255,.5) 0 1px, transparent 1px);
+  background-size: 28px 28px;
+  mix-blend-mode: soft-light;
+}
+
+.north-coach-gradient {
+  background:
+    linear-gradient(90deg, rgba(33, 29, 25, 0.96) 0%, rgba(33, 29, 25, 0.78) 42%, rgba(33, 29, 25, 0.32) 100%),
+    radial-gradient(ellipse at 78% 45%, rgba(215, 92, 39, 0.28), transparent 46%),
+    url("/north-coach-bg.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+.north-coach-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image:
+    radial-gradient(circle at 20% 18%, rgba(255,255,255,.34) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 78% 72%, rgba(0,0,0,.22) 0 1px, transparent 1.4px);
+  background-size: 26px 26px, 31px 31px;
+  mix-blend-mode: soft-light;
+}
+
+.north-coach-gradient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(110deg, rgba(255,255,255,.05), transparent 22%, transparent 70%, rgba(255,255,255,.04)),
+    radial-gradient(ellipse at 78% 96%, rgba(255, 111, 42, 0.2), transparent 44%);
+}
+
+.coach-needle-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: coachNeedleSeek 9s cubic-bezier(.68, 0, .22, 1) infinite;
+}
+
+@keyframes coachNeedleSeek {
+  0% {
+    transform: rotate(-5deg);
+  }
+
+  38% {
+    transform: rotate(16deg);
+  }
+
+  62% {
+    transform: rotate(8deg);
+  }
+
+  100% {
+    transform: rotate(355deg);
+  }
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+@media (max-width: 1023px) {
+  .app-page-header {
+    border-radius: 28px !important;
+  }
+
+  .app-popover {
+    max-width: calc(100vw - 1.5rem);
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1180px) {
+  .auth-screen {
+    overflow-y: auto !important;
+    padding-block: 1rem !important;
+  }
+
+  .auth-layout {
+    min-height: auto !important;
+    max-width: 820px !important;
+    grid-template-columns: 1fr !important;
+    align-content: start !important;
+    gap: 1.25rem !important;
+  }
+
+  .auth-copy {
+    justify-content: flex-start !important;
+    padding-block: 0.75rem !important;
+  }
+
+  .auth-copy h1 {
+    margin-top: 1.8rem !important;
+    max-width: 34rem !important;
+    font-size: clamp(2.45rem, 7vw, 4.6rem) !important;
+  }
+
+  .auth-copy p {
+    max-width: 30rem !important;
+  }
+
+  .auth-card {
+    max-width: 520px !important;
+    margin-inline: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-top-control select {
+    max-width: 9.5rem;
+  }
+
+  .north-coach-gradient {
+    background-position: 58% center;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1023px) {
+  body {
+    background:
+      radial-gradient(circle at top, rgba(215, 92, 39, 0.16), transparent 20rem),
+      var(--background);
+  }
+}
