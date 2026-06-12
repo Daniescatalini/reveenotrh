@@ -625,7 +625,24 @@ function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string)
     }
   });
 
-  return nextBills.map((bill) => normalizeBillStatus(bill)).sort(sortByPaymentPriority);
+  const rootsByRecurrence = new Map(
+    Object.values(fixedRoots).map((root) => [root.recurrenceId ?? String(root.id), root]),
+  );
+
+  return nextBills
+    .map((bill) => {
+      const normalized = normalizeBillStatus(bill);
+      const root = rootsByRecurrence.get(normalized.recurrenceId ?? String(normalized.id));
+      if (
+        root?.logoUrl &&
+        normalized.generatedFromId !== undefined &&
+        normalized.logoUrl !== root.logoUrl
+      ) {
+        return { ...normalized, logoUrl: root.logoUrl };
+      }
+      return normalized;
+    })
+    .sort(sortByPaymentPriority);
 }
 
 function readFileAsDataUrl(file: File, maxSize = 320) {
@@ -2974,8 +2991,8 @@ function ObjectivesView({
               onClick={() => onToggle(objective.id)}
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border transition ${
                 objective.done
-                  ? "border-[#d75c27] bg-[#d75c27] text-white shadow-[0_0_0_4px_rgba(215,92,39,.12)]"
-                  : "border-[#211d19]/18 bg-white/55 text-transparent dark:border-white/24 dark:bg-white/8"
+                  ? "border-[#d75c27] bg-[#d75c27] text-white shadow-[0_0_0_4px_rgba(215,92,39,.12),inset_0_1px_0_rgba(255,255,255,.35)]"
+                  : "border-white/55 bg-[linear-gradient(135deg,rgba(255,255,255,.82),rgba(255,255,255,.32))] text-transparent shadow-[inset_0_1px_0_rgba(255,255,255,.8),0_10px_28px_rgba(33,29,25,.08)] backdrop-blur-xl dark:border-white/22 dark:bg-[linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.045))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_12px_34px_rgba(0,0,0,.24)]"
               }`}
             >
               {objective.done ? <Check className="h-3.5 w-3.5" /> : null}
@@ -3329,7 +3346,7 @@ function ReportsView({
               {timelineItems.length ? timelineItems.map(({ date, icon: Icon, title, detail, tone, action }) => {
                 const content = (
                   <>
-                    <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_8px_22px_rgba(33,29,25,.06)] ring-8 ring-[var(--background)] dark:ring-[#050505] ${tone === "green" ? "border-emerald-500/20 bg-[#eaf8f1] text-emerald-600 dark:border-emerald-300/38 dark:bg-emerald-300/14 dark:text-emerald-200" : tone === "purple" ? "border-purple-500/20 bg-[#f0e6ff] text-purple-600 dark:border-purple-300/38 dark:bg-purple-300/14 dark:text-purple-200" : tone === "dark" ? "border-[#211d19]/20 bg-[#211d19] text-white dark:border-white/22 dark:bg-white/12 dark:text-white" : "border-[#d75c27]/20 bg-[#fff0e8] text-[#d75c27] dark:border-[#ff9b6d]/38 dark:bg-[#d75c27]/16 dark:text-[#ffb08a]"}`}>
+                    <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_8px_22px_rgba(33,29,25,.06)] ring-8 ring-[var(--background)] dark:ring-[#050505] ${tone === "green" ? "border-emerald-600/22 bg-[#e4f8ee] text-[#0b6b43] dark:border-emerald-500/30 dark:bg-[#dff8eb] dark:text-[#075233]" : tone === "purple" ? "border-purple-500/20 bg-[#f0e6ff] text-purple-600 dark:border-purple-300/38 dark:bg-purple-300/14 dark:text-purple-200" : tone === "dark" ? "border-[#211d19]/20 bg-[#211d19] text-white dark:border-white/22 dark:bg-white/12 dark:text-white" : "border-[#d75c27]/20 bg-[#fff0e8] text-[#d75c27] dark:border-[#ff9b6d]/38 dark:bg-[#d75c27]/16 dark:text-[#ffb08a]"}`}>
                       <Icon className="h-5 w-5" />
                     </span>
                     <p className="mt-2 text-[11px] font-bold text-[var(--muted)]">{formatDate(date)}</p>
@@ -6995,7 +7012,7 @@ function PlanningView({
             <div className="mt-5 space-y-3">
               {monthGoals.map((goal) => (
                 <div key={goal.id} className="grid gap-3 rounded-2xl border border-[var(--line)] bg-white/45 p-3 dark:bg-white/6 md:grid-cols-[32px_1fr_120px_22px] md:items-center">
-                  <button type="button" onClick={() => setMonthGoals((current) => current.map((item) => item.id === goal.id ? { ...item, done: !item.done } : item))} className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${goal.done ? "border-[#d75c27] bg-[#d75c27] text-white shadow-[0_0_0_4px_rgba(215,92,39,.12)]" : "border-[#211d19]/20 bg-white/55 text-transparent dark:border-white/24 dark:bg-white/8"}`}>
+                  <button type="button" onClick={() => setMonthGoals((current) => current.map((item) => item.id === goal.id ? { ...item, done: !item.done } : item))} className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${goal.done ? "border-[#d75c27] bg-[#d75c27] text-white shadow-[0_0_0_4px_rgba(215,92,39,.12),inset_0_1px_0_rgba(255,255,255,.35)]" : "border-white/55 bg-[linear-gradient(135deg,rgba(255,255,255,.82),rgba(255,255,255,.32))] text-transparent shadow-[inset_0_1px_0_rgba(255,255,255,.8),0_10px_28px_rgba(33,29,25,.08)] backdrop-blur-xl dark:border-white/22 dark:bg-[linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.045))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_12px_34px_rgba(0,0,0,.24)]"}`}>
                     {goal.done ? <Check className="h-3.5 w-3.5" /> : null}
                   </button>
                   <div>
@@ -7778,6 +7795,9 @@ export default function ReveeNorthApp() {
           }
           if (!updatedBill.fixed && bill.recurrenceId === recurrenceId && bill.status !== "paga" && bill.dueDate > updatedBill.dueDate) {
             return { ...bill, fixed: false };
+          }
+          if (updatedBill.fixed && updatedBill.logoUrl && bill.recurrenceId === recurrenceId && bill.generatedFromId !== undefined && bill.status !== "paga" && bill.dueDate > updatedBill.dueDate) {
+            return { ...bill, logoUrl: updatedBill.logoUrl };
           }
           return bill;
         }),
