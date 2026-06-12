@@ -2622,50 +2622,64 @@ function BillsView({
   const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
   const summaryItems = [
-    { label: "Total de contas do mês", value: String(bills.length), helper: "inclui atrasadas antigas" },
-    { label: "Contas pagas", value: String(paidBills.length), helper: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)) },
-    { label: "Contas pendentes", value: String(pendingOrOverdueBills.length), helper: `${alertBills.length} em atraso` },
-    { label: "Valor total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: "compromissos do período" },
-    { label: "Valor já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: "pagamentos registrados" },
-    { label: "Valor faltante", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: "ainda não pago" },
+    { label: "Total de contas do mês", value: String(bills.length), helper: "inclui atrasadas antigas", icon: ReceiptText, gradient: "from-[#211d19] via-[#5b4538] to-[#d75c27]", glow: "shadow-[#d75c27]/18" },
+    { label: "Contas pagas", value: String(paidBills.length), helper: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), icon: Check, gradient: "from-emerald-600 via-[#2f9f79] to-[#d75c27]", glow: "shadow-emerald-500/18" },
+    { label: "Contas pendentes", value: String(pendingOrOverdueBills.length), helper: `${alertBills.length} em atraso`, icon: CircleAlert, gradient: "from-[#8f1d1d] via-[#d75c27] to-[#f0a24c]", glow: "shadow-red-500/18" },
+    { label: "Valor total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: "compromissos do período", icon: CalendarDays, gradient: "from-[#4b382f] via-[#8b5e3c] to-[#d75c27]", glow: "shadow-[#8b5e3c]/18" },
+    { label: "Valor já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: "pagamentos registrados", icon: Wallet, gradient: "from-[#1f7a5b] via-[#31b878] to-[#a7d96d]", glow: "shadow-emerald-500/18" },
+    { label: "Valor faltante", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: "ainda não pago", icon: Coins, gradient: "from-[#d75c27] via-[#f0853f] to-[#f4b840]", glow: "shadow-orange-500/18" },
   ];
 
   return (
     <div className="space-y-4">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Filtros</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Organize por status e categoria.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as BillStatus | "todas")}
+            className="min-w-[150px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/10 dark:bg-white/8 dark:text-white"
+          >
+            {Object.entries(statusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            className="min-w-[220px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/10 dark:bg-white/8 dark:text-white"
+          >
+            {billCategories.map((item) => (
+              <option key={item} value={item}>
+                {item === "todas" ? "Todas categorias" : item}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Card>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {summaryItems.map((item) => (
-          <Card key={item.label} className="p-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--muted)]">{item.label}</p>
-            <p className="mt-2 text-lg font-black text-[var(--foreground)]">{item.value}</p>
-            <p className="mt-1 text-[11px] font-semibold text-[var(--muted)]">{item.helper}</p>
-          </Card>
+        {summaryItems.map(({ icon: Icon, ...item }) => (
+          <div
+            key={item.label}
+            className={`relative min-h-[138px] overflow-hidden rounded-[28px] bg-gradient-to-br ${item.gradient} p-4 text-white shadow-[0_20px_55px_rgba(33,29,25,.12)] ${item.glow}`}
+          >
+            <span className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/18 blur-2xl" />
+            <span className="absolute bottom-0 right-0 h-20 w-20 rounded-tl-[42px] bg-white/10" />
+            <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/16 text-white ring-1 ring-white/18">
+              <Icon className="h-4 w-4" />
+            </span>
+            <p className="relative mt-4 text-[9px] font-black uppercase tracking-[0.14em] text-white/72">{item.label}</p>
+            <p className="relative mt-2 text-xl font-black leading-tight text-white">{item.value}</p>
+            <p className="relative mt-1 text-[11px] font-bold leading-4 text-white/72">{item.helper}</p>
+          </div>
         ))}
       </div>
-
-      <Card className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <select
-          value={status}
-          onChange={(event) => setStatus(event.target.value as BillStatus | "todas")}
-          className="rounded-2xl border border-[var(--line)] bg-white/60 px-3 py-2 text-xs font-bold outline-none dark:bg-white/8"
-        >
-          {Object.entries(statusLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={category}
-          onChange={(event) => setCategory(event.target.value)}
-          className="rounded-2xl border border-[var(--line)] bg-white/60 px-3 py-2 text-xs font-bold outline-none dark:bg-white/8"
-        >
-          {billCategories.map((item) => (
-            <option key={item} value={item}>
-              {item === "todas" ? "Todas categorias" : item}
-            </option>
-          ))}
-        </select>
-      </Card>
 
       {alertBills.length ? (
         <Card className="border-red-500/20 bg-red-500/8 p-4 lg:p-5">
@@ -4455,6 +4469,11 @@ function AccountModal({
   const [draft, setDraft] = useState(bill);
 
   const update = (patch: Partial<Bill>) => setDraft((current) => ({ ...current, ...patch }));
+  const updateLogo = (logoUrl: string) => {
+    const nextDraft = { ...draft, logoUrl };
+    setDraft(nextDraft);
+    onSave(nextDraft);
+  };
   const currentCategory = findCategory(categories, draft.category, "conta");
   const CurrentIcon = iconMap[(currentCategory?.icon ?? "Sparkles") as keyof typeof iconMap] ?? Sparkles;
 
@@ -4466,7 +4485,7 @@ function AccountModal({
           category={draft.category}
           color={currentCategory?.color ?? "#d75c27"}
           Icon={CurrentIcon}
-          onChange={(logoUrl) => update({ logoUrl })}
+          onChange={updateLogo}
         />
         <div className="min-w-0 flex-1">
           <TextInput
