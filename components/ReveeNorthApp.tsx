@@ -5496,8 +5496,69 @@ function NorthIADrawer({
   nextMonthAdvice: string;
 }) {
   const [answer, setAnswer] = useState("");
+  const [question, setQuestion] = useState("");
+  const [conversation, setConversation] = useState<Array<{ role: "user" | "north"; text: string }>>([]);
   const priorityList = [...metrics.overdueBills, ...metrics.pendingBills].sort(sortByPaymentPriority);
   const firstPriority = priorityList[0];
+  const freeToDecide = Math.max(0, metrics.unassignedValue);
+  const totalLateDays = sum(metrics.overdueBills, (bill) => daysOverdue(bill));
+  const paidLateAverage = metrics.paidLateBills.length
+    ? Math.round(sum(metrics.paidLateBills, paidLateDays) / metrics.paidLateBills.length)
+    : 0;
+  const extractAmount = (text: string) => {
+    const match = text.match(/(?:r\$|\$)?\s*(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{1,2}))?/i);
+    if (!match) return 0;
+    return Number(`${match[1].replace(/\./g, "")}.${match[2] ?? "00"}`);
+  };
+  const consult = (text: string) => {
+    const normalized = normalizeCategoryName(text);
+    const amount = extractAmount(text);
+    const purchaseIntent = /(comprar|compra|quero|posso|vale a pena|parcelar|gastar)/i.test(text);
+    const urgentText = firstPriority
+      ? `${firstPriority.name} (${firstPriority.status === "atrasada" ? overdueLabel(firstPriority) : `vence em ${formatDate(firstPriority.dueDate)}`})`
+      : "";
+
+    if (normalized.includes("pagar") || normalized.includes("primeiro") || normalized.includes("prioridade")) {
+      return firstPriority
+        ? `Minha orientação é pagar primeiro ${urgentText}. Depois resolva as outras contas em atraso, da mais antiga para a mais recente, e só então as próximas a vencer. Isso protege seu North Score e reduz risco de juros.`
+        : "Você não tem contas pendentes agora. A próxima decisão pode ser guardar uma parte em reserva ou acelerar uma meta importante.";
+    }
+
+    if (purchaseIntent) {
+      const priceText = amount ? `Esse desejo custa ${formatCurrency(amount)}. ` : "";
+      if (metrics.overdueBills.length) {
+        return `${priceText}Eu não recomendo comprar agora. Você tem ${metrics.overdueBills.length} conta(s) atrasada(s), somando ${formatCurrency(metrics.totalOverdue)}, e a prioridade é ${urgentText}. Primeiro quite a mais antiga; depois a gente reavalia a compra com menos pressão.`;
+      }
+      if (amount && amount > freeToDecide) {
+        return `${priceText}Hoje seu valor livre para decidir é ${formatCurrency(freeToDecide)}. Essa compra passa do espaço seguro do mês em ${formatCurrency(amount - freeToDecide)}. Para manter direção, eu compraria só se você reduzir outro destino ou aumentar entrada.`;
+      }
+      if (metrics.pendingBills.length) {
+        return `${priceText}Dá para considerar, mas com cautela: ainda existem ${metrics.pendingBills.length} conta(s) pendente(s), somando ${formatCurrency(metrics.totalPending)}. Reserve primeiro esses compromissos e use no máximo ${formatCurrency(freeToDecide)} como limite de decisão.`;
+      }
+      return `${priceText}Pelo cenário atual, essa compra parece possível se ficar dentro de ${formatCurrency(freeToDecide)} e não competir com reserva ou metas. Minha sugestão: compre à vista se couber; evite parcelar algo que reduza sua folga dos próximos meses.`;
+    }
+
+    if (normalized.includes("mes") || normalized.includes("diagnostico") || normalized.includes("relatorio")) {
+      return `${checkup.title}. ${checkup.summary} Você tem ${metrics.overdueBills.length} conta(s) atrasada(s), ${metrics.pendingBills.length} pendente(s), ${metrics.paidBills.length} paga(s) e ${formatCurrency(freeToDecide)} livre para decidir. ${metrics.paidLateBills.length ? `Você pagou ${metrics.paidLateBills.length} conta(s) com atraso médio de ${paidLateAverage} dia(s).` : "As contas pagas não registraram atraso."}`;
+    }
+
+    if (normalized.includes("reserva") || normalized.includes("guardar") || normalized.includes("meta")) {
+      if (metrics.overdueBills.length) {
+        return `Antes de guardar mais, eu priorizaria as contas atrasadas: são ${formatCurrency(metrics.totalOverdue)} em aberto e ${totalLateDays} dia(s) de atraso acumulado. Depois disso, guardar uma parte fica muito mais saudável.`;
+      }
+      return `Você pode guardar uma parte do valor livre: hoje há ${formatCurrency(freeToDecide)} para decidir. Eu começaria com uma reserva pequena e constante, sem comprometer contas pendentes.`;
+    }
+
+    return `Olhei seu mês por três sinais: compromissos, atraso e folga. Hoje você tem ${metrics.overdueBills.length} atrasada(s), ${metrics.pendingBills.length} pendente(s), ${formatCurrency(metrics.totalPaid)} já pago e ${formatCurrency(freeToDecide)} livre para decidir. ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
+  };
+  const submitQuestion = (text = question) => {
+    const clean = text.trim();
+    if (!clean) return;
+    const nextAnswer = consult(clean);
+    setConversation((current) => [...current, { role: "user", text: clean }, { role: "north", text: nextAnswer }]);
+    setAnswer(nextAnswer);
+    setQuestion("");
+  };
   const answers: Record<string, string> = {
     "Tenho dinheiro livre?": "Você possui valor livre para decidir, mas a melhor ordem é quitar compromissos essenciais antes de aumentar gastos flexíveis.",
     "Qual conta devo pagar primeiro?": firstPriority
@@ -5506,7 +5567,11 @@ function NorthIADrawer({
     "Como foi meu mês?": `${checkup.title}. ${checkup.summary} Pontos positivos: ${checkup.positives.join(" ")} Pontos de atenção: ${checkup.attentions.join(" ")} ${checkup.focus}`,
     "Como melhorar o próximo mês?": nextMonthAdvice,
   };
-  const resetAnswer = () => setAnswer("");
+  const resetAnswer = () => {
+    setAnswer("");
+    setQuestion("");
+    setConversation([]);
+  };
 
   return (
     <>
@@ -5557,15 +5622,18 @@ function NorthIADrawer({
         </span>
       </button>
       <aside
-        className={`fixed inset-x-3 bottom-3 top-3 z-[90] flex w-auto flex-col rounded-[26px] border border-white/12 bg-[#211d19]/88 p-4 text-white shadow-[0_30px_100px_rgba(0,0,0,.38),inset_0_1px_0_rgba(255,255,255,.08)] backdrop-blur-2xl transition-transform duration-300 sm:inset-x-auto sm:inset-y-4 sm:right-4 sm:w-[min(420px,calc(100vw-2rem))] sm:rounded-[30px] sm:p-5 ${
+        className={`fixed inset-x-3 bottom-3 top-3 z-[90] flex w-auto flex-col overflow-hidden rounded-[26px] border border-white/12 bg-[#211d19]/90 p-4 text-white shadow-[0_30px_100px_rgba(0,0,0,.32),inset_0_1px_0_rgba(255,255,255,.08)] backdrop-blur-2xl transition-transform duration-300 sm:inset-x-auto sm:inset-y-4 sm:right-4 sm:w-[min(420px,calc(100vw-2rem))] sm:rounded-[30px] sm:p-5 ${
           open ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
+        <span className="pointer-events-none absolute -left-24 top-16 h-56 w-56 rounded-full bg-[#d75c27]/24 blur-3xl" />
+        <span className="pointer-events-none absolute -right-28 bottom-20 h-64 w-64 rounded-full bg-[#f4b78f]/18 blur-3xl" />
+        <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_38%_18%,rgba(255,255,255,.08),transparent_13rem),linear-gradient(180deg,rgba(255,255,255,.06),transparent_42%)]" />
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="relative">
             <p className="text-xl font-extrabold">North IA</p>
             <p className="mt-1 text-xs font-semibold text-white/50">
-              Seu dinheiro com direção.
+              Consultora financeira do seu mês.
             </p>
           </div>
           <button
@@ -5577,10 +5645,10 @@ function NorthIADrawer({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-6 flex-1 space-y-3 overflow-auto pb-24">
-          <div className="rounded-3xl bg-white/8 p-4">
+        <div className="relative mt-6 flex-1 space-y-3 overflow-auto pb-28">
+          <div className="rounded-3xl border border-white/10 bg-white/8 p-4">
             <p className="text-sm leading-6 text-white/80">
-              Posso te ajudar a reduzir carga mental, entender o mês e escolher a próxima decisão com mais clareza.
+              Me conte uma decisão financeira. Exemplo: “quero comprar um celular de R$ 1.800”. Eu analiso atrasos, contas pendentes, saldo livre e prioridades antes de responder.
             </p>
           </div>
           <div className="grid gap-2">
@@ -5588,41 +5656,62 @@ function NorthIADrawer({
               <button
                 type="button"
                 key={suggestion}
-                onClick={() => setAnswer(answers[suggestion])}
+                onClick={() => {
+                  setAnswer(answers[suggestion]);
+                  setConversation((current) => [...current, { role: "user", text: suggestion }, { role: "north", text: answers[suggestion] }]);
+                }}
                 className="rounded-2xl border border-white/10 bg-white/6 px-3 py-2.5 text-left text-xs font-bold text-white/78 transition hover:bg-white/10"
               >
                 {suggestion}
               </button>
             ))}
           </div>
-          {answer ? (
-            <div className="rounded-3xl border border-[#d75c27]/25 bg-[#d75c27]/10 p-4">
-              <p className="text-sm font-semibold leading-6">{answer}</p>
-              <div className="mt-4 rounded-2xl bg-black/14 p-3">
-                <p className="text-xs font-bold text-white/62">Isso te ajudou a decidir?</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {["Sim, resolveu", "Quero ajustar", "Me mostre outra opção"].map((label) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={label === "Sim, resolveu" ? resetAnswer : undefined}
-                      className="rounded-xl bg-white/10 px-3 py-2 text-[11px] font-bold text-white hover:bg-white/16"
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {conversation.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={`max-w-[92%] rounded-3xl border p-4 text-sm font-semibold leading-6 ${
+                message.role === "user"
+                  ? "ml-auto border-white/10 bg-white/12 text-white"
+                  : "border-[#d75c27]/22 bg-[#d75c27]/10 text-white/88"
+              }`}
+            >
+              {message.text}
             </div>
-          ) : null}
+          ))}
         </div>
         <div className="absolute inset-x-5 bottom-5">
           <button type="button" onClick={resetAnswer} className="mb-2 text-xs font-bold text-white/44 hover:text-white">
             Limpar conversa
           </button>
-          <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,.06)]">
-            Pergunte à North IA...
-          </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitQuestion();
+            }}
+            className="grid grid-cols-[1fr_auto] items-end gap-2 rounded-3xl border border-white/12 bg-white/10 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,.06)] backdrop-blur-2xl"
+          >
+            <textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  submitQuestion();
+                }
+              }}
+              rows={2}
+              placeholder="Pergunte: quero comprar..."
+              className="max-h-28 min-h-12 resize-none bg-transparent px-3 py-2 text-sm font-semibold text-white outline-none placeholder:text-white/38"
+            />
+            <button
+              type="submit"
+              disabled={!question.trim()}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#d75c27] text-white shadow-[0_10px_24px_rgba(215,92,39,.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Enviar pergunta"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </form>
         </div>
       </aside>
     </>
