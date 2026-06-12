@@ -4525,6 +4525,10 @@ function AccountModal({
     setDraft(nextDraft);
     onSave(nextDraft);
   };
+  const saveAndClose = () => {
+    onSave(draft);
+    onClose();
+  };
   const currentCategory = findCategory(categories, draft.category, "conta");
   const CurrentIcon = iconMap[(currentCategory?.icon ?? "Sparkles") as keyof typeof iconMap] ?? Sparkles;
 
@@ -4625,10 +4629,7 @@ function AccountModal({
           </button>
           <button
             type="button"
-            onClick={() => {
-              onSave(draft);
-              onClose();
-            }}
+            onClick={saveAndClose}
             className="rounded-2xl bg-[#d75c27] px-5 py-2.5 text-xs font-extrabold text-white"
           >
             <Save className="mr-2 inline h-4 w-4" />
@@ -7654,8 +7655,6 @@ export default function ReveeNorthApp() {
         }),
         accountCreatedAt,
       );
-      const freshBill = nextBills.find((bill) => bill.id === updatedBill.id);
-      if (freshBill) setSelectedBill(freshBill);
       persistCloudPatchNow({ bills: nextBills });
       return nextBills;
     });
