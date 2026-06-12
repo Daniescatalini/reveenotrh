@@ -2670,12 +2670,12 @@ function BillsView({
   const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
   const summaryItems = [
-    { label: "Total de contas do mês", value: String(bills.length), helper: "inclui atrasadas antigas", icon: ReceiptText, gradient: "from-[#211d19] via-[#5b4538] to-[#d75c27]", glow: "shadow-[#d75c27]/18" },
-    { label: "Contas pagas", value: String(paidBills.length), helper: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), icon: Check, gradient: "from-emerald-600 via-[#2f9f79] to-[#d75c27]", glow: "shadow-emerald-500/18" },
-    { label: "Contas pendentes", value: String(pendingOrOverdueBills.length), helper: `${alertBills.length} em atraso`, icon: CircleAlert, gradient: "from-[#8f1d1d] via-[#d75c27] to-[#f0a24c]", glow: "shadow-red-500/18" },
-    { label: "Valor total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: "compromissos do período", icon: CalendarDays, gradient: "from-[#4b382f] via-[#8b5e3c] to-[#d75c27]", glow: "shadow-[#8b5e3c]/18" },
-    { label: "Valor já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: "pagamentos registrados", icon: Wallet, gradient: "from-[#1f7a5b] via-[#31b878] to-[#a7d96d]", glow: "shadow-emerald-500/18" },
-    { label: "Valor faltante", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: "ainda não pago", icon: Coins, gradient: "from-[#d75c27] via-[#f0853f] to-[#f4b840]", glow: "shadow-orange-500/18" },
+    { label: "Total de contas do mês", value: String(bills.length), helper: "inclui atrasadas antigas", icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
+    { label: "Contas pagas", value: String(paidBills.length), helper: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), icon: Check, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
+    { label: "Contas pendentes", value: String(pendingOrOverdueBills.length), helper: `${alertBills.length} em atraso`, icon: CircleAlert, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
+    { label: "Valor total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: "compromissos do período", icon: CalendarDays, accent: "#8a6a55", soft: "bg-[#8a6a55]/10 text-[#6d5344]" },
+    { label: "Valor já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: "pagamentos registrados", icon: Wallet, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
+    { label: "Valor faltante", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: "ainda não pago", icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
   ];
 
   return (
@@ -2715,16 +2715,17 @@ function BillsView({
         {summaryItems.map(({ icon: Icon, ...item }) => (
           <div
             key={item.label}
-            className={`relative min-h-[138px] overflow-hidden rounded-[28px] bg-gradient-to-br ${item.gradient} p-4 text-white shadow-[0_20px_55px_rgba(33,29,25,.12)] ${item.glow}`}
+            className="relative min-h-[138px] overflow-hidden rounded-[26px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,.82),rgba(247,244,240,.58))] p-4 text-[#211d19] shadow-[0_16px_44px_rgba(33,29,25,.07)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/6 dark:text-white"
           >
-            <span className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/18 blur-2xl" />
-            <span className="absolute bottom-0 right-0 h-20 w-20 rounded-tl-[42px] bg-white/10" />
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/16 text-white ring-1 ring-white/18">
+            <span className="absolute inset-x-4 top-0 h-px bg-white/80" />
+            <span className="absolute bottom-0 left-0 h-1 w-full opacity-70" style={{ background: item.accent }} />
+            <span className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#d75c27]/8 blur-2xl" />
+            <span className={`relative flex h-9 w-9 items-center justify-center rounded-2xl ${item.soft}`}>
               <Icon className="h-4 w-4" />
             </span>
-            <p className="relative mt-4 text-[9px] font-black uppercase tracking-[0.14em] text-white/72">{item.label}</p>
-            <p className="relative mt-2 text-xl font-black leading-tight text-white">{item.value}</p>
-            <p className="relative mt-1 text-[11px] font-bold leading-4 text-white/72">{item.helper}</p>
+            <p className="relative mt-4 text-[9px] font-black uppercase tracking-[0.14em] text-[#756b62] dark:text-white/58">{item.label}</p>
+            <p className="relative mt-2 text-xl font-black leading-tight text-[#211d19] dark:text-white">{item.value}</p>
+            <p className="relative mt-1 text-[11px] font-bold leading-4 text-[#756b62] dark:text-white/58">{item.helper}</p>
           </div>
         ))}
       </div>
