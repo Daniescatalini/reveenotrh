@@ -426,6 +426,12 @@ function findCategory(categories: Category[], name: string, type?: Category["typ
   );
 }
 
+function sortedCategories(categories: Category[], type?: Category["type"], activeOnly = false) {
+  return categories
+    .filter((category) => (!type || category.type === type) && (!activeOnly || category.active))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+}
+
 function SafeBillLogo({
   logoUrl,
   fallback,
@@ -713,11 +719,7 @@ function mergeDefaultCategories(current: Category[]) {
     }
     return category;
   });
-  const existingKeys = new Set(migrated.map((category) => `${category.type}:${normalizeCategoryName(category.name)}`));
-  const additions = initialCategories.filter(
-    (category) => !existingKeys.has(`${category.type}:${normalizeCategoryName(category.name)}`),
-  );
-  return additions.length ? [...migrated, ...additions] : migrated;
+  return migrated.length ? migrated : initialCategories;
 }
 
 function buildMetrics(data: MonthData) {
@@ -2210,18 +2212,6 @@ function Dashboard({
             ) : null}
             </div>
             <div className="mt-6">
-            <div className="mb-4 grid max-w-xl gap-2 sm:grid-cols-3">
-              {[
-                ["Livre", formatCurrency(metrics.unassignedValue)],
-                ["Pendências", String(metrics.pendingBills.length + metrics.overdueBills.length)],
-                ["Pago", formatCurrency(metrics.totalPaid)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/42">{label}</p>
-                  <p className="mt-1 text-xs font-extrabold text-white/86">{value}</p>
-                </div>
-              ))}
-            </div>
             <div className="mt-5 flex flex-wrap gap-2">
               {metrics.urgent ? (
                 <button
@@ -2675,7 +2665,7 @@ function BillsView({
   const [category, setCategory] = useState("todas");
   const billCategories = [
     "todas",
-    ...categories.filter((item) => item.type === "conta").map((item) => item.name),
+    ...sortedCategories(categories, "conta", true).map((item) => item.name),
   ];
   const filteredBills = bills.filter((bill) => {
     const matchesStatus = status === "todas" || bill.status === status;
@@ -2683,7 +2673,11 @@ function BillsView({
     return matchesStatus && matchesCategory;
   });
   const alertBills = filteredBills.filter((bill) => bill.status === "atrasada").sort(sortByPaymentPriority);
-  const regularBills = filteredBills.filter((bill) => bill.status !== "atrasada").sort(sortByPaymentPriority);
+  const pendingBills = filteredBills.filter((bill) => bill.status === "pendente").sort(sortByPaymentPriority);
+  const completedBills = filteredBills
+    .filter((bill) => bill.status === "paga")
+    .sort((a, b) => new Date(`${a.dueDate}T12:00:00`).getTime() - new Date(`${b.dueDate}T12:00:00`).getTime());
+  const regularBills = [...pendingBills, ...completedBills];
   const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
   const summaryItems = [
@@ -4578,8 +4572,7 @@ function AccountModal({
             onChange={(event) => update({ category: event.target.value })}
             className="mt-2 w-full rounded-xl border border-[var(--line)] bg-white/55 px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
           >
-            {categories
-              .filter((category) => category.type === "conta" && category.active)
+            {sortedCategories(categories, "conta", true)
               .map((category) => (
                 <option key={category.id} value={category.name}>
                   {category.name}
@@ -4604,12 +4597,15 @@ function AccountModal({
           value={draft.paidDate ?? ""}
           onChange={(value) => update({ paidDate: value })}
         />
-        <label className="flex items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
-          <span className="text-xs font-bold">Conta fixa</span>
-          <Toggle
-            checked={Boolean(draft.fixed)}
-            onChange={(fixed) => update({ fixed })}
-          />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Conta fixa</span>
+          <div className="mt-2 flex min-h-[46px] items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
+            <span className="text-sm font-semibold">{draft.fixed ? "Ativa" : "Inativa"}</span>
+            <Toggle
+              checked={Boolean(draft.fixed)}
+              onChange={(fixed) => update({ fixed })}
+            />
+          </div>
         </label>
       </div>
 
@@ -4673,7 +4669,7 @@ function IncomeModal({
 }) {
   const [draft, setDraft] = useState({
     source: "",
-    category: categories.find((category) => category.type === "entrada")?.name ?? "Salario",
+    category: sortedCategories(categories, "entrada", true)[0]?.name ?? "Salario",
     amount: 0,
     receivedDate: getReferenceDate(selectedMonth),
     note: "",
@@ -4696,8 +4692,7 @@ function IncomeModal({
             }
             className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
           >
-            {categories
-              .filter((category) => category.type === "entrada")
+            {sortedCategories(categories, "entrada", true)
               .map((category) => (
                 <option key={category.id} value={category.name}>
                   {category.name}
@@ -4762,7 +4757,7 @@ function BillModalCreate({
   const [draft, setDraft] = useState<Bill>({
     id: Date.now(),
     name: "Nova despesa",
-    category: categories.find((category) => category.type === "conta")?.name ?? "Moradia",
+    category: sortedCategories(categories, "conta", true)[0]?.name ?? "Moradia",
     dueDate: `${selectedMonth}-10`,
     expectedAmount: 0,
     status: "pendente",
@@ -4795,16 +4790,19 @@ function BillModalCreate({
             onChange={(event) => update({ category: event.target.value })}
             className="mt-2 w-full rounded-xl border border-[var(--line)] bg-white/55 px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
           >
-            {categories.filter((category) => category.type === "conta" && category.active).map((category) => (
+            {sortedCategories(categories, "conta", true).map((category) => (
               <option key={category.id}>{category.name}</option>
             ))}
           </select>
         </label>
         <MoneyInput label="Valor previsto" value={draft.expectedAmount} onChange={(expectedAmount) => update({ expectedAmount })} />
         <TextInput label="Vencimento" type="date" value={draft.dueDate} onChange={(dueDate) => update({ dueDate })} />
-        <label className="flex items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
-          <span className="text-xs font-bold">Conta fixa</span>
-          <Toggle checked={Boolean(draft.fixed)} onChange={(fixed) => update({ fixed })} />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Conta fixa</span>
+          <div className="mt-2 flex min-h-[46px] items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
+            <span className="text-sm font-semibold">{draft.fixed ? "Ativa" : "Inativa"}</span>
+            <Toggle checked={Boolean(draft.fixed)} onChange={(fixed) => update({ fixed })} />
+          </div>
         </label>
       </div>
       <label className="mt-4 block">
@@ -5883,9 +5881,16 @@ function SettingsView({
         {selectedSection === "categorias" ? (
           <CategoriesSettings
             categories={categories}
+            bills={allBills}
             updateCategory={updateCategory}
             deleteCategory={deleteCategory}
             onOpenCategoryModal={onOpenCategoryModal}
+            onBlockedDelete={(category, count) =>
+              onConfirmDanger(
+                "Categoria vinculada",
+                `Existem ${count} conta${count === 1 ? "" : "s"} vinculada${count === 1 ? "" : "s"} à categoria ${category.name}. Para excluir, altere a categoria dessas contas primeiro.`,
+              )
+            }
           />
         ) : null}
 
@@ -5917,14 +5922,18 @@ function SettingsView({
 
 function CategoriesSettings({
   categories,
+  bills,
   updateCategory,
   deleteCategory,
   onOpenCategoryModal,
+  onBlockedDelete,
 }: {
   categories: Category[];
+  bills: Bill[];
   updateCategory: (id: number, patch: Partial<Category>) => void;
   deleteCategory: (id: number) => void;
   onOpenCategoryModal: () => void;
+  onBlockedDelete: (category: Category, count: number) => void;
 }) {
   const [tab, setTab] = useState<Category["type"]>("conta");
   const [iconPickerFor, setIconPickerFor] = useState<number | null>(null);
@@ -5962,10 +5971,12 @@ function CategoriesSettings({
         </button>
       </div>
       <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white/24 dark:bg-white/5">
-        {categories
-          .filter((category) => category.type === tab)
+        {sortedCategories(categories, tab)
           .map((category) => {
             const Icon = iconMap[category.icon as keyof typeof iconMap] ?? Sparkles;
+            const linkedBills = bills.filter(
+              (bill) => category.type === "conta" && normalizeCategoryName(bill.category) === normalizeCategoryName(category.name),
+            ).length;
             return (
               <div
                 key={category.id}
@@ -6024,9 +6035,16 @@ function CategoriesSettings({
                 </div>
                 <button
                   type="button"
-                  onClick={() => deleteCategory(category.id)}
+                  onClick={() => {
+                    if (linkedBills > 0) {
+                      onBlockedDelete(category, linkedBills);
+                      return;
+                    }
+                    deleteCategory(category.id);
+                  }}
                   className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted)] transition hover:bg-red-500/10 hover:text-red-600"
                   aria-label="Excluir categoria"
+                  title={linkedBills > 0 ? `${linkedBills} conta(s) vinculada(s)` : "Excluir categoria"}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
