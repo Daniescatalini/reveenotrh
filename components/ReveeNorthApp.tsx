@@ -1567,11 +1567,12 @@ function Sidebar({
 
         <div className={`flex ${collapsed ? "flex-col items-center gap-3" : "items-start justify-between gap-3 pl-0 pr-1"}`}>
           <div className={`min-w-0 ${collapsed ? "hidden" : "block"}`}>
-            <img
-              src="/logo-reveenorth-white.png"
-              alt="ReveeNorth"
-              className="h-9 w-[198px] object-contain object-left"
-            />
+            <div className="flex items-center gap-2.5">
+              <BrandSymbol className="h-9 w-9 shrink-0" />
+              <p className="text-[1.72rem] font-semibold leading-none tracking-tight">
+                Revee<span className="font-extrabold">North</span>
+              </p>
+            </div>
             <p className="mt-2 text-sm font-medium leading-6 text-white">
               Seu dinheiro com direção
             </p>
@@ -2187,10 +2188,11 @@ function Dashboard({
   return (
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[1.42fr_0.9fr]">
-        <section className="north-coach-gradient relative overflow-hidden rounded-[32px] border border-white/10 p-6 text-white shadow-[0_28px_80px_rgba(33,29,25,.28)] backdrop-blur-[26px] md:p-7">
+        <section className="north-coach-gradient relative overflow-hidden rounded-[32px] border border-white/10 p-6 text-white shadow-[0_28px_80px_rgba(33,29,25,.28)] backdrop-blur-[26px] md:min-h-[360px] md:p-7">
           <div className="pointer-events-none absolute -left-24 top-0 h-64 w-64 rounded-full bg-white/7 blur-3xl" />
           <div className="pointer-events-none absolute -right-14 bottom-0 h-80 w-80 rounded-full bg-[#d75c27]/38 blur-3xl" />
-          <div className="relative grid gap-6 md:grid-cols-[minmax(0,1fr)_220px] md:items-center">
+          <div className="relative grid h-full gap-6 md:grid-cols-[minmax(0,1fr)_260px] md:items-stretch">
+            <div className="flex h-full flex-col justify-between">
             <div>
             <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#d75c27]">
               North Coach
@@ -2206,6 +2208,20 @@ function Dashboard({
                 Orientação marcada como entendida.
               </p>
             ) : null}
+            </div>
+            <div className="mt-6">
+            <div className="mb-4 grid max-w-xl gap-2 sm:grid-cols-3">
+              {[
+                ["Livre", formatCurrency(metrics.unassignedValue)],
+                ["Pendências", String(metrics.pendingBills.length + metrics.overdueBills.length)],
+                ["Pago", formatCurrency(metrics.totalPaid)],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/42">{label}</p>
+                  <p className="mt-1 text-xs font-extrabold text-white/86">{value}</p>
+                </div>
+              ))}
+            </div>
             <div className="mt-5 flex flex-wrap gap-2">
               {metrics.urgent ? (
                 <button
@@ -2232,6 +2248,7 @@ function Dashboard({
                 Por que isso?
               </button>
             ) : null}
+            </div>
             </div>
             </div>
             <div className="relative">
@@ -2631,9 +2648,9 @@ function IncomesView({
 
 function StatusPill({ status }: { status: BillStatus }) {
   const classes = {
-    pendente: "bg-amber-500/12 text-amber-700 dark:text-amber-300",
-    paga: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
-    atrasada: "bg-red-500/12 text-red-600 dark:text-red-300",
+    pendente: "border border-amber-500/25 bg-amber-500/12 text-amber-700 dark:border-amber-300/35 dark:bg-amber-300/12 dark:text-amber-200",
+    paga: "border border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:border-emerald-300/35 dark:bg-emerald-300/12 dark:text-emerald-200",
+    atrasada: "border border-red-500/25 bg-red-500/12 text-red-600 dark:border-red-300/35 dark:bg-red-300/12 dark:text-red-200",
   };
 
   return (
@@ -2689,7 +2706,7 @@ function BillsView({
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value as BillStatus | "todas")}
-            className="min-w-[150px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/10 dark:bg-white/8 dark:text-white"
+            className="min-w-[150px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
           >
             {Object.entries(statusLabels).map(([value, label]) => (
               <option key={value} value={value}>
@@ -2700,7 +2717,7 @@ function BillsView({
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value)}
-            className="min-w-[220px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/10 dark:bg-white/8 dark:text-white"
+            className="min-w-[220px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
           >
             {billCategories.map((item) => (
               <option key={item} value={item}>
@@ -2961,8 +2978,10 @@ function ObjectivesView({
             <button
               type="button"
               onClick={() => onToggle(objective.id)}
-              className={`flex h-6 w-6 items-center justify-center rounded-xl ${
-                objective.done ? "bg-[#d75c27] text-white" : "bg-[#211d19]/8"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border transition ${
+                objective.done
+                  ? "border-[#d75c27] bg-[#d75c27] text-white shadow-[0_0_0_4px_rgba(215,92,39,.12)]"
+                  : "border-[#211d19]/18 bg-white/55 text-transparent dark:border-white/24 dark:bg-white/8"
               }`}
             >
               {objective.done ? <Check className="h-3.5 w-3.5" /> : null}
@@ -3316,7 +3335,7 @@ function ReportsView({
               {timelineItems.length ? timelineItems.map(({ date, icon: Icon, title, detail, tone, action }) => {
                 const content = (
                   <>
-                    <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_8px_22px_rgba(33,29,25,.06)] ring-8 ring-[var(--background)] dark:ring-[#050505] ${tone === "green" ? "border-emerald-500/20 bg-[#eaf8f1] text-emerald-600 dark:border-emerald-400/25 dark:bg-emerald-500/18 dark:text-emerald-200" : tone === "purple" ? "border-purple-500/20 bg-[#f0e6ff] text-purple-600 dark:border-purple-400/25 dark:bg-purple-500/18 dark:text-purple-200" : tone === "dark" ? "border-[#211d19]/20 bg-[#211d19] text-white dark:border-white/15 dark:bg-white dark:text-[#050505]" : "border-[#d75c27]/20 bg-[#fff0e8] text-[#d75c27] dark:border-[#d75c27]/30 dark:bg-[#d75c27]/18 dark:text-[#ffb08a]"}`}>
+                    <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_8px_22px_rgba(33,29,25,.06)] ring-8 ring-[var(--background)] dark:ring-[#050505] ${tone === "green" ? "border-emerald-500/20 bg-[#eaf8f1] text-emerald-600 dark:border-emerald-300/38 dark:bg-emerald-300/14 dark:text-emerald-200" : tone === "purple" ? "border-purple-500/20 bg-[#f0e6ff] text-purple-600 dark:border-purple-300/38 dark:bg-purple-300/14 dark:text-purple-200" : tone === "dark" ? "border-[#211d19]/20 bg-[#211d19] text-white dark:border-white/22 dark:bg-white/12 dark:text-white" : "border-[#d75c27]/20 bg-[#fff0e8] text-[#d75c27] dark:border-[#ff9b6d]/38 dark:bg-[#d75c27]/16 dark:text-[#ffb08a]"}`}>
                       <Icon className="h-5 w-5" />
                     </span>
                     <p className="mt-2 text-[11px] font-bold text-[var(--muted)]">{formatDate(date)}</p>
@@ -5145,7 +5164,7 @@ function ProfileModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#211d19]/45 p-4 backdrop-blur-md">
-      <div className="app-modal-panel relative max-h-[92vh] w-full max-w-xl overflow-auto rounded-[30px] border border-white/60 bg-[#f7f7f6]/94 p-5 shadow-[0_30px_90px_rgba(33,29,25,0.22)] backdrop-blur-2xl dark:border-white/12 dark:bg-[#050505] md:p-7">
+      <div className="app-modal-panel relative max-h-[92vh] w-full max-w-3xl overflow-auto rounded-[30px] border border-white/60 bg-[#f7f7f6]/94 p-5 shadow-[0_30px_90px_rgba(33,29,25,0.22)] backdrop-blur-2xl dark:border-white/12 dark:bg-[#050505] md:p-7">
         <button
           type="button"
           onClick={onClose}
@@ -5156,12 +5175,10 @@ function ProfileModal({
         </button>
 
         <div className="pr-16">
-          <p className="text-sm font-semibold tracking-[0.06em] text-[var(--muted)]">
-            Cadastro rápido
-          </p>
-          <h2 className="mt-2 text-2xl font-extrabold tracking-tight md:text-3xl">
+          <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
             Meu perfil
           </h2>
+          <p className="mt-2 text-sm font-semibold text-[var(--muted)]">Atualize seus dados pessoais e profissão.</p>
         </div>
 
         <div className="mt-6 space-y-5">
@@ -5212,6 +5229,7 @@ function ProfileModal({
                   value={draft.email}
                   onChange={() => undefined}
                   readOnly
+                  className="sm:col-span-2"
                 />
                 <ProfileField
                   label="Profissão"
@@ -5262,14 +5280,16 @@ function ProfileField({
   value,
   onChange,
   readOnly = false,
+  className = "",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
+  className?: string;
 }) {
   return (
-    <label className="block">
+    <label className={`block ${className}`}>
       <span className="text-xs font-extrabold text-[var(--muted)]">{label}</span>
       <input
         value={value}
@@ -5277,8 +5297,8 @@ function ProfileField({
         onChange={(event) => onChange(event.target.value)}
         className={`mt-2 w-full rounded-[18px] border px-4 py-3 text-sm font-semibold outline-none transition focus:border-[#d75c27] dark:bg-white/8 ${
           readOnly
-            ? "border-[#211d19]/10 bg-[#211d19]/7 text-[var(--muted)]"
-            : "border-[#211d19]/10 bg-white/70 text-[var(--foreground)]"
+            ? "border-[#211d19]/10 bg-[#211d19]/7 text-[var(--muted)] dark:border-white/12 dark:bg-white/7"
+            : "border-[#211d19]/10 bg-white/70 text-[var(--foreground)] dark:border-white/12 dark:bg-white/8"
         }`}
       />
     </label>
@@ -6956,8 +6976,8 @@ function PlanningView({
             </div>
             <div className="mt-5 space-y-3">
               {monthGoals.map((goal) => (
-                <div key={goal.id} className="grid gap-3 rounded-2xl border border-[var(--line)] bg-white/45 p-3 dark:bg-white/6 md:grid-cols-[28px_1fr_120px_22px] md:items-center">
-                  <button type="button" onClick={() => setMonthGoals((current) => current.map((item) => item.id === goal.id ? { ...item, done: !item.done } : item))} className={`flex h-6 w-6 items-center justify-center rounded-lg border ${goal.done ? "border-[#d75c27] bg-[#d75c27] text-white" : "border-[#211d19]/20"}`}>
+                <div key={goal.id} className="grid gap-3 rounded-2xl border border-[var(--line)] bg-white/45 p-3 dark:bg-white/6 md:grid-cols-[32px_1fr_120px_22px] md:items-center">
+                  <button type="button" onClick={() => setMonthGoals((current) => current.map((item) => item.id === goal.id ? { ...item, done: !item.done } : item))} className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${goal.done ? "border-[#d75c27] bg-[#d75c27] text-white shadow-[0_0_0_4px_rgba(215,92,39,.12)]" : "border-[#211d19]/20 bg-white/55 text-transparent dark:border-white/24 dark:bg-white/8"}`}>
                     {goal.done ? <Check className="h-3.5 w-3.5" /> : null}
                   </button>
                   <div>
@@ -7396,6 +7416,7 @@ export default function ReveeNorthApp() {
   const [objectiveModalOpen, setObjectiveModalOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [notificationsCleared, setNotificationsCleared] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [northIaOpen, setNorthIaOpen] = useState(false);
@@ -8004,20 +8025,37 @@ export default function ReveeNorthApp() {
                 </button>
                 {notificationMenuOpen ? (
                   <div className="app-popover absolute right-0 top-14 z-[130] w-80 max-w-[calc(100vw-1.5rem)] rounded-[28px] border border-white/70 bg-[#f5f2ef]/98 p-4 text-[#211d19] shadow-2xl backdrop-blur-2xl dark:border-white/12 dark:bg-[#050505] dark:text-white">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d75c27]">
-                      Notificações
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d75c27]">
+                        Notificações
+                      </p>
+                      {!notificationsCleared ? (
+                        <button
+                          type="button"
+                          onClick={() => setNotificationsCleared(true)}
+                          className="rounded-xl border border-[var(--line)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--muted)] transition hover:border-[#d75c27]/40 hover:text-[#d75c27]"
+                        >
+                          Limpar
+                        </button>
+                      ) : null}
+                    </div>
+                    {!notificationsCleared ? (
                     <div className="mt-3 space-y-2">
                       {[
                         ["Energia vence em breve", "Priorize pagar para evitar juros."],
                         ["R$ 1.670 livre para decidir", "Você pode direcionar para reserva ou contas."],
                       ].map(([title, text]) => (
-                        <div key={title} className="app-muted-surface rounded-2xl bg-white/72 p-3 dark:bg-[#080808]">
+                        <div key={title} className="app-muted-surface rounded-2xl border border-transparent bg-white/72 p-3 dark:border-white/10 dark:bg-white/6">
                           <p className="text-sm font-extrabold">{title}</p>
                           <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{text}</p>
                         </div>
                       ))}
                     </div>
+                    ) : (
+                      <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/45 p-4 text-sm font-semibold text-[var(--muted)] dark:bg-white/6">
+                        Tudo limpo por enquanto.
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>
