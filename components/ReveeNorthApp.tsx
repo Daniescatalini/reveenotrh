@@ -3025,8 +3025,8 @@ function ReportsView({
   const overdueTotal = sum(metrics.overdueBills, (bill) => bill.expectedAmount);
   const totalSaved = sum(data.goals, (goal) => goal.current);
   const reserveGoal = data.goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
-  const reserveTarget = (reserveGoal?.target ?? sum(data.goals, (goal) => goal.target)) || 1;
-  const reserveProgress = Math.round(((reserveGoal?.current ?? totalSaved) / Math.max(reserveTarget, 1)) * 100);
+  const reserveTarget = reserveGoal?.target ?? 0;
+  const reserveProgress = reserveGoal ? Math.round((reserveGoal.current / Math.max(reserveTarget, 1)) * 100) : 0;
   const completedObjectives = data.objectives.filter((objective) => objective.done).length;
   const totalObjectives = Math.max(data.objectives.length, 1);
   const moneyDestinationTotal = Math.max(sum(data.bills, (bill) => bill.paidAmount ?? bill.expectedAmount) + totalSaved, 1);
@@ -3043,7 +3043,8 @@ function ReportsView({
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
   const distributionItems = categoryTotals.slice(0, 5);
-  const distributionTotal = Math.max(sum(distributionItems, (item) => item.value), 1);
+  const distributionRealTotal = sum(distributionItems, (item) => item.value);
+  const distributionTotal = Math.max(distributionRealTotal, 1);
   let angle = 0;
   const conicGradient = distributionItems.length ? distributionItems.map((item) => {
     const startAngle = angle;
@@ -3092,16 +3093,6 @@ function ReportsView({
       tone: "orange",
       action: "Contas atrasadas",
     })),
-    ...data.goals
-      .filter((goal) => goal.current > 0)
-      .map((goal) => ({
-        date: goal.deadline,
-        icon: Flag,
-        title: `Meta com saldo: ${goal.name}`,
-        detail: `${formatCurrency(goal.current)} guardados`,
-        tone: "purple",
-        action: "Metas",
-      })),
   ]
     .sort((a, b) => new Date(`${a.date}T12:00:00`).getTime() - new Date(`${b.date}T12:00:00`).getTime())
     .slice(0, 8);
@@ -3130,7 +3121,9 @@ function ReportsView({
     largestCategory
       ? `Sua maior concentração de gastos foi em ${largestCategory.label}, com ${formatCurrency(largestCategory.value)}.`
       : "Ainda não há gastos por categoria suficientes para leitura.",
-    reserveProgress >= 100
+    !reserveGoal
+      ? "Você ainda não cadastrou uma meta de reserva de emergência."
+      : reserveProgress >= 100
       ? "Sua reserva atingiu o alvo configurado."
       : "Sua reserva ainda está abaixo do ideal.",
     progressedGoals.length
@@ -3145,7 +3138,9 @@ function ReportsView({
   ];
   const recommendations = [
     { title: metrics.urgent ? `Quitar ${metrics.urgent.name}` : "Revisar próximas contas", helper: metrics.urgent?.status === "atrasada" ? `${overdueLabel(metrics.urgent)} • maior impacto no North Score` : "Protege o planejamento do mês", action: "Contas atrasadas" },
-    reserveProgress < 100
+    !reserveGoal
+      ? { title: "Criar meta de reserva", helper: "Só depois de quitar atrasos prioritários", action: "Metas" }
+      : reserveProgress < 100
       ? { title: "Reforçar a reserva", helper: "Aumenta segurança e melhora o North Score", action: "Reserva" }
       : { title: "Manter reserva protegida", helper: "Evite usar esse valor para gastos do mês", action: "Reserva" },
     largestCategory
@@ -3274,7 +3269,7 @@ function ReportsView({
             <div className="relative mx-auto flex h-44 w-44 items-center justify-center rounded-full" style={{ background: `conic-gradient(${conicGradient})` }}>
               <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white text-center shadow-inner dark:bg-[#211d19]">
                 <span className="text-[10px] font-bold text-[var(--muted)]">Total</span>
-                <span className="text-sm font-black">{formatCurrency(distributionTotal)}</span>
+                <span className="text-sm font-black">{formatCurrency(distributionRealTotal)}</span>
               </div>
             </div>
             <div className="space-y-3">
@@ -6287,14 +6282,14 @@ function DataPanel({
   const paid = sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount);
   const pending = sum(pendingBills, (bill) => bill.expectedAmount);
   const overdue = sum(overdueBills, (bill) => bill.expectedAmount);
-  const saved = sum(filteredGoals.length ? filteredGoals : goals, (goal) => goal.current);
+  const saved = sum(filteredGoals, (goal) => goal.current);
   const free = Math.max(0, received - paid - pending - overdue - saved);
   const periodMetrics = buildMetrics(buildPeriodMonthData(fromMonth, toMonth, incomes, bills, goals));
   const previousPeriodMetrics = buildMetrics(buildPeriodMonthData(addMonths(fromMonth, -buildMonthRange(fromMonth, toMonth).length || -1), addMonths(fromMonth, -1), incomes, bills, goals));
   const northScore = calculateNorthScore(periodMetrics, goals);
   const previousNorthScore = calculateNorthScore(previousPeriodMetrics, goals);
   const northScoreDelta = northScore - previousNorthScore;
-  const categoryTotals = filteredBills.reduce<Record<string, number>>((acc, bill) => {
+  const categoryTotals = paidBills.reduce<Record<string, number>>((acc, bill) => {
     acc[bill.category] = (acc[bill.category] ?? 0) + (bill.paidAmount ?? bill.expectedAmount);
     return acc;
   }, {});
@@ -6417,7 +6412,7 @@ function DataPanel({
               ${[["Contas pagas", paid],["Contas pendentes", pending],["Contas atrasadas", overdue],["Guardado", saved],["Livre", free]].map(([label, value]) => `<div class="card"><div class="label">${label}</div><div class="value">${formatCurrency(value as number)}</div></div>`).join("")}
             </section>
             <h2>Metas principais</h2>
-            <p>${(filteredGoals.length ? filteredGoals : goals).slice(0, 3).map((goal) => `${goal.name}: ${Math.round((goal.current / Math.max(goal.target, 1)) * 100)}%`).join(" • ") || "Nenhuma meta cadastrada."}</p>
+            <p>${filteredGoals.slice(0, 3).map((goal) => `${goal.name}: ${Math.round((goal.current / Math.max(goal.target, 1)) * 100)}%`).join(" • ") || "Nenhuma meta com data dentro do período selecionado."}</p>
             <section class="recommendation">
               <div class="label" style="color:#ffb08c">Recomendações North</div>
               <p>${topPriority ? `Pague primeiro ${topPriority.name}. ` : ""}Existem ${overdueBills.length} conta(s) atrasada(s), ${pendingBills.length} pendente(s) e ${paidBills.filter(isPaidLate).length} paga(s) com atraso médio de ${averagePaidLate} dia(s).</p>
