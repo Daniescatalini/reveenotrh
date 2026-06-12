@@ -590,6 +590,12 @@ function nextDueDateForMonth(dueDate: string, targetMonth: string) {
   return `${targetMonth}-${String(day).padStart(2, "0")}`;
 }
 
+function fixedRepeatEndMonth(bill: Bill) {
+  if (!bill.fixed || bill.repeatMonths === "indefinido" || bill.repeatMonths === undefined) return "9999-12";
+  const repeatMonths = Math.max(1, Math.floor(bill.repeatMonths));
+  return addMonths(monthKey(bill.dueDate), repeatMonths - 1);
+}
+
 function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string) {
   const horizon = addMonths(monthKey(getTodayKey()), 3);
   const nextBills = [...sourceBills];
@@ -609,7 +615,9 @@ function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string)
 
   Object.values(fixedRoots).forEach((root) => {
     const recurrenceId = root.recurrenceId ?? String(root.id);
-    for (let month = addMonths(monthKey(root.dueDate), 1); month <= horizon; month = addMonths(month, 1)) {
+    const repeatEndMonth = fixedRepeatEndMonth(root);
+    const generateUntil = repeatEndMonth < horizon ? repeatEndMonth : horizon;
+    for (let month = addMonths(monthKey(root.dueDate), 1); month <= generateUntil; month = addMonths(month, 1)) {
       if (month < monthKey(accountCreatedAt) || existingKeys.has(`${recurrenceId}:${month}`)) continue;
       nextBills.push({
         ...root,
@@ -4561,6 +4569,7 @@ function AccountModal({
   };
   const currentCategory = findCategory(categories, draft.category, "conta");
   const CurrentIcon = iconMap[(currentCategory?.icon ?? "Sparkles") as keyof typeof iconMap] ?? Sparkles;
+  const finiteRepeat = typeof draft.repeatMonths === "number";
 
   return (
     <Modal title="Editar conta" onClose={onClose}>
@@ -4620,11 +4629,54 @@ function AccountModal({
             <span className="text-sm font-semibold">{draft.fixed ? "Ativa" : "Inativa"}</span>
             <Toggle
               checked={Boolean(draft.fixed)}
-              onChange={(fixed) => update({ fixed })}
+              onChange={(fixed) => update({ fixed, repeatMonths: fixed ? draft.repeatMonths ?? "indefinido" : undefined })}
             />
           </div>
         </label>
       </div>
+
+      {draft.fixed ? (
+        <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/32 p-3 dark:bg-white/5">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_120px]">
+            <button
+              type="button"
+              onClick={() => update({ repeatMonths: "indefinido" })}
+              className={`rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
+                !finiteRepeat
+                  ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
+                  : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
+              }`}
+            >
+              Repetir sem fim
+            </button>
+            <button
+              type="button"
+              onClick={() => update({ repeatMonths: typeof draft.repeatMonths === "number" ? draft.repeatMonths : 6 })}
+              className={`rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
+                finiteRepeat
+                  ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
+                  : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
+              }`}
+            >
+              Por meses
+            </button>
+            <label className={finiteRepeat ? "block" : "pointer-events-none opacity-45"}>
+              <span className="sr-only">Quantidade de meses</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={finiteRepeat ? String(draft.repeatMonths) : ""}
+                onChange={(event) => update({ repeatMonths: Math.max(1, parseInt(event.target.value.replace(/\D/g, "") || "1", 10)) })}
+                placeholder="6 meses"
+                className="h-full min-h-[38px] w-full rounded-xl border border-[var(--line)] bg-white/55 px-3 text-center text-xs font-extrabold outline-none focus:border-[#d75c27] dark:bg-white/8"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">
+            Cada mês pode ter valor próprio sem alterar os outros.
+          </p>
+        </div>
+      ) : null}
 
       <label className="mt-4 block">
         <span className="text-xs font-bold text-[var(--muted)]">Observações</span>
@@ -4784,6 +4836,7 @@ function BillModalCreate({
   const update = (patch: Partial<Bill>) => setDraft((current) => ({ ...current, ...patch }));
   const currentCategory = findCategory(categories, draft.category, "conta");
   const CurrentIcon = iconMap[(currentCategory?.icon ?? "Sparkles") as keyof typeof iconMap] ?? Sparkles;
+  const finiteRepeat = typeof draft.repeatMonths === "number";
 
   return (
     <Modal title="Nova despesa" onClose={onClose}>
@@ -4818,10 +4871,52 @@ function BillModalCreate({
           <span className="text-xs font-bold text-[var(--muted)]">Conta fixa</span>
           <div className="mt-2 flex min-h-[46px] items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
             <span className="text-sm font-semibold">{draft.fixed ? "Ativa" : "Inativa"}</span>
-            <Toggle checked={Boolean(draft.fixed)} onChange={(fixed) => update({ fixed })} />
+            <Toggle checked={Boolean(draft.fixed)} onChange={(fixed) => update({ fixed, repeatMonths: fixed ? draft.repeatMonths ?? "indefinido" : undefined })} />
           </div>
         </label>
       </div>
+      {draft.fixed ? (
+        <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/32 p-3 dark:bg-white/5">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_120px]">
+            <button
+              type="button"
+              onClick={() => update({ repeatMonths: "indefinido" })}
+              className={`rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
+                !finiteRepeat
+                  ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
+                  : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
+              }`}
+            >
+              Repetir sem fim
+            </button>
+            <button
+              type="button"
+              onClick={() => update({ repeatMonths: typeof draft.repeatMonths === "number" ? draft.repeatMonths : 6 })}
+              className={`rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
+                finiteRepeat
+                  ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
+                  : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
+              }`}
+            >
+              Por meses
+            </button>
+            <label className={finiteRepeat ? "block" : "pointer-events-none opacity-45"}>
+              <span className="sr-only">Quantidade de meses</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={finiteRepeat ? String(draft.repeatMonths) : ""}
+                onChange={(event) => update({ repeatMonths: Math.max(1, parseInt(event.target.value.replace(/\D/g, "") || "1", 10)) })}
+                placeholder="6 meses"
+                className="h-full min-h-[38px] w-full rounded-xl border border-[var(--line)] bg-white/55 px-3 text-center text-xs font-extrabold outline-none focus:border-[#d75c27] dark:bg-white/8"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">
+            Use sem fim para luz/internet ou meses contados para parcelas.
+          </p>
+        </div>
+      ) : null}
       <label className="mt-4 block">
         <span className="text-xs font-bold text-[var(--muted)]">Observação</span>
         <textarea
@@ -7784,23 +7879,33 @@ export default function ReveeNorthApp() {
 
   const handleSaveBill = (updatedBill: Bill) => {
     setBills((current) => {
+      const recurrenceId = updatedBill.recurrenceId ?? String(updatedBill.id);
+      const repeatEndMonth = fixedRepeatEndMonth(updatedBill);
       const nextBills = ensureFixedBillInstances(
-        current.map((bill) => {
-          const recurrenceId = updatedBill.recurrenceId ?? String(updatedBill.id);
+        current
+          .map((bill): Bill | null => {
           if (bill.id === updatedBill.id) {
             return normalizeBillStatus({
               ...updatedBill,
-              recurrenceId: updatedBill.fixed ? recurrenceId : updatedBill.recurrenceId,
+              repeatMonths: updatedBill.fixed ? updatedBill.repeatMonths ?? "indefinido" : undefined,
+              recurrenceId: updatedBill.fixed ? recurrenceId : undefined,
             });
           }
-          if (!updatedBill.fixed && bill.recurrenceId === recurrenceId && bill.status !== "paga" && bill.dueDate > updatedBill.dueDate) {
-            return { ...bill, fixed: false };
+          if (
+            bill.recurrenceId === recurrenceId &&
+            bill.generatedFromId !== undefined &&
+            bill.status !== "paga" &&
+            bill.dueDate > updatedBill.dueDate &&
+            (!updatedBill.fixed || monthKey(bill.dueDate) > repeatEndMonth)
+          ) {
+            return null;
           }
           if (updatedBill.fixed && updatedBill.logoUrl && bill.recurrenceId === recurrenceId && bill.generatedFromId !== undefined && bill.status !== "paga" && bill.dueDate > updatedBill.dueDate) {
             return { ...bill, logoUrl: updatedBill.logoUrl };
           }
           return bill;
-        }),
+        })
+          .filter((bill): bill is Bill => Boolean(bill)),
         accountCreatedAt,
       );
       persistCloudPatchNow({ bills: nextBills });
@@ -7823,7 +7928,8 @@ export default function ReveeNorthApp() {
         [
           normalizeBillStatus({
             ...bill,
-            recurrenceId: bill.fixed ? bill.recurrenceId ?? String(bill.id) : bill.recurrenceId,
+            repeatMonths: bill.fixed ? bill.repeatMonths ?? "indefinido" : undefined,
+            recurrenceId: bill.fixed ? bill.recurrenceId ?? String(bill.id) : undefined,
           }),
           ...current,
         ],
