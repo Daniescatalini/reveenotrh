@@ -660,6 +660,14 @@ function sanitizeLoadedState(state: Partial<ReveeNorthCloudState>, accountCreate
   };
 }
 
+function preserveBillLogos(incomingBills: Bill[], currentBills: Bill[]) {
+  const currentById = new Map(currentBills.map((bill) => [bill.id, bill]));
+  return incomingBills.map((bill) => {
+    const currentLogo = currentById.get(bill.id)?.logoUrl;
+    return !bill.logoUrl && currentLogo ? { ...bill, logoUrl: currentLogo } : bill;
+  });
+}
+
 function buildVisibleBills(allBills: Bill[], selectedMonth: string) {
   const currentMonth = monthKey(getTodayKey());
   const normalized = allBills.map((bill) => normalizeBillStatus(bill));
@@ -729,9 +737,13 @@ function buildMetrics(data: MonthData) {
   const totalOverdue = sum(overdueBills, (bill) => bill.expectedAmount);
   const totalMissing = totalPending + totalOverdue;
   const projectedBalance = totalIncome - totalPaid - totalPending - totalOverdue;
-  const reserveDestination = totalIncome ? 250 : 0;
-  const goalsDestination = totalIncome ? 300 : 0;
-  const freeDestination = totalIncome ? Math.round(totalIncome * 0.08) : 0;
+  const reserveGoal = data.goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
+  const reserveDestination = reserveGoal?.current ?? 0;
+  const goalsDestination = sum(
+    data.goals.filter((goal) => !normalizeCategoryName(goal.name).includes("reserva")),
+    (goal) => goal.current,
+  );
+  const freeDestination = 0;
   const totalDirected = Math.min(
     totalIncome,
     totalPaid + totalPending + totalOverdue + reserveDestination + goalsDestination + freeDestination,
@@ -1963,7 +1975,7 @@ function DashboardMetricCard({
   icon: React.ElementType;
   tone: "green" | "orange" | "purple" | "red";
   children?: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
 }) {
   const toneClasses = {
     green: "bg-emerald-500/12 text-emerald-600",
@@ -1972,12 +1984,9 @@ function DashboardMetricCard({
     red: "bg-red-500/12 text-red-500",
   };
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="glass min-h-[190px] rounded-[28px] p-5 text-left transition hover:-translate-y-0.5 hover:bg-white/78 dark:hover:bg-white/10"
-    >
+  const className = `glass min-h-[190px] rounded-[28px] p-5 text-left ${onClick ? "transition hover:-translate-y-0.5 hover:bg-white/78 dark:hover:bg-white/10" : ""}`;
+  const content = (
+    <>
       <div className="flex items-start gap-4">
         <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${toneClasses[tone]}`}>
           <Icon className="h-5 w-5" />
@@ -1990,7 +1999,15 @@ function DashboardMetricCard({
       {children ?? <MiniSparkline tone={tone} />}
       {detail ? <p className="mt-2 text-xs font-bold text-[#d75c27]">{detail}</p> : null}
       <p className="mt-1 text-xs font-semibold leading-5 text-[var(--muted)]">{helper}</p>
+    </>
+  );
+
+  return onClick ? (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
     </button>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 
@@ -2135,6 +2152,9 @@ function Dashboard({
 }) {
   const [coachUnderstood, setCoachUnderstood] = useState(false);
   const pendingTotal = metrics.totalPending + metrics.totalOverdue;
+  const reserveGoal = data.goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
+  const reserveTarget = reserveGoal?.target ?? 0;
+  const reserveProgress = reserveTarget ? Math.min(100, Math.round((metrics.reserveDestination / reserveTarget) * 100)) : 0;
   const urgentLabel = metrics.urgent
     ? metrics.urgent.status === "atrasada"
       ? `Vencida em ${formatDate(metrics.urgent.dueDate)}`
@@ -2261,14 +2281,17 @@ function Dashboard({
         <DashboardMetricCard
           label="Reserva"
           value={formatCurrency(metrics.reserveDestination)}
-          helper="Meta: R$ 800,00"
-          detail="31% da meta"
+          helper={reserveGoal ? `Meta: ${formatCurrency(reserveTarget)}` : "Crie uma meta chamada Reserva para acompanhar."}
+          detail={reserveGoal ? `${reserveProgress}% da meta` : undefined}
           icon={PiggyBank}
           tone="purple"
-          onClick={() => onOpenFinanceDetail(buildFinanceDetail("Reserva", data, metrics, realBalance))}
+          onClick={reserveGoal ? () => onOpenFinanceDetail(buildFinanceDetail("Reserva", data, metrics, realBalance)) : undefined}
         >
           <div className="mt-6 h-3 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
-            <div className="h-full w-[31%] rounded-full bg-gradient-to-r from-purple-500 to-[#d75c27]" />
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-purple-500 to-[#d75c27]"
+              style={{ width: `${reserveProgress}%` }}
+            />
           </div>
         </DashboardMetricCard>
       </div>
@@ -2393,24 +2416,49 @@ function buildFinanceDetail(
   }
 
   if (label === "Guardado" || label === "Reserva") {
+    const reserveGoal = data.goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
     return {
       title: "Reserva",
-      value: metrics.reserveDestination,
-      description: "Aportes e valores direcionados para proteção financeira.",
+      value: reserveGoal?.current ?? 0,
+      description: reserveGoal
+        ? "Valor guardado na meta de reserva cadastrada."
+        : "Nenhuma meta de reserva cadastrada ainda.",
       sections: [
         {
-          title: "Aportes realizados",
-          total: metrics.reserveDestination,
-          items: [
-            {
-              label: "Reserva recomendada do mês",
-              helper: "Baseada no planejamento atual.",
-              amount: metrics.reserveDestination,
-              tone: "neutral",
-            },
-          ],
+          title: "Reserva cadastrada",
+          total: reserveGoal?.current ?? 0,
+          items: reserveGoal
+            ? [
+                {
+                  date: reserveGoal.deadline,
+                  label: reserveGoal.name,
+                  helper: `${Math.round((reserveGoal.current / Math.max(reserveGoal.target, 1)) * 100)}% da meta`,
+                  amount: reserveGoal.current,
+                  tone: "neutral",
+                },
+              ]
+            : [],
         },
       ],
+    };
+  }
+
+  const categoryItems = data.bills
+    .filter((bill) => bill.status === "paga" && normalizeCategoryName(bill.category) === normalizeCategoryName(label))
+    .map((bill) => ({
+      date: bill.paidDate ?? bill.dueDate,
+      label: bill.name,
+      helper: isPaidLate(bill) ? `Pago com ${paidLateDays(bill)} dia(s) de atraso` : "Pago em dia",
+      amount: bill.paidAmount ?? bill.expectedAmount,
+      tone: "out" as const,
+    }));
+
+  if (categoryItems.length) {
+    return {
+      title: label,
+      value: sum(categoryItems, (item) => item.amount),
+      description: "Contas pagas desta categoria no período.",
+      sections: [{ title: "Contas pagas", total: sum(categoryItems, (item) => item.amount), items: categoryItems }],
     };
   }
 
@@ -2987,25 +3035,22 @@ function ReportsView({
     .map((category) => ({
       label: category.name,
       value: sum(
-        data.bills.filter((bill) => normalizeCategoryName(bill.category) === normalizeCategoryName(category.name)),
+        metrics.paidBills.filter((bill) => normalizeCategoryName(bill.category) === normalizeCategoryName(category.name)),
         (bill) => bill.paidAmount ?? bill.expectedAmount,
       ),
       color: category.color,
     }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
-  const distributionItems = [
-    ...categoryTotals.slice(0, 5),
-    { label: "Metas e Reserva", value: totalSaved, color: "#9b6bdf" },
-  ].filter((item) => item.value > 0);
+  const distributionItems = categoryTotals.slice(0, 5);
   const distributionTotal = Math.max(sum(distributionItems, (item) => item.value), 1);
   let angle = 0;
-  const conicGradient = distributionItems.map((item) => {
+  const conicGradient = distributionItems.length ? distributionItems.map((item) => {
     const startAngle = angle;
     const endAngle = startAngle + (item.value / distributionTotal) * 360;
     angle = endAngle;
     return `${item.color} ${startAngle}deg ${endAngle}deg`;
-  }).join(", ");
+  }).join(", ") : "#eee7e1 0deg 360deg";
   const trendMonths = buildMonthRange(addMonths(data.selectedMonth, -5), data.selectedMonth);
   const trendRows = trendMonths.map((month) => {
     const monthData = buildMonthDataFromLists(month, allIncomes, allBills, allGoals, []);
@@ -3229,11 +3274,11 @@ function ReportsView({
             <div className="relative mx-auto flex h-44 w-44 items-center justify-center rounded-full" style={{ background: `conic-gradient(${conicGradient})` }}>
               <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white text-center shadow-inner dark:bg-[#211d19]">
                 <span className="text-[10px] font-bold text-[var(--muted)]">Total</span>
-                <span className="text-sm font-black">{formatCurrency(metrics.totalIncome)}</span>
+                <span className="text-sm font-black">{formatCurrency(distributionTotal)}</span>
               </div>
             </div>
             <div className="space-y-3">
-              {distributionItems.map((item) => {
+              {distributionItems.length ? distributionItems.map((item) => {
                 const percent = Math.round((item.value / distributionTotal) * 100);
                 return (
                   <button
@@ -3246,12 +3291,18 @@ function ReportsView({
                     <span className="text-sm font-black">{percent}%</span>
                   </button>
                 );
-              })}
+              }) : (
+                <div className="rounded-2xl border border-[var(--line)] bg-white/45 p-4 text-sm font-semibold text-[var(--muted)] dark:bg-white/5">
+                  Nenhuma conta paga registrada neste mês.
+                </div>
+              )}
             </div>
           </div>
-          <button type="button" onClick={() => onOpenFinanceDetail(buildFinanceDetail("Livre para decidir", data, metrics, realBalance))} className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--line)] px-4 py-3 text-xs font-extrabold">
-            Ver todos os detalhes <ChevronRight className="h-4 w-4" />
-          </button>
+          {distributionItems.length ? (
+            <button type="button" onClick={() => onOpenFinanceDetail(buildFinanceDetail("Saiu no mês", data, metrics, realBalance))} className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--line)] px-4 py-3 text-xs font-extrabold">
+              Ver contas pagas <ChevronRight className="h-4 w-4" />
+            </button>
+          ) : null}
         </Card>
       </div>
 
@@ -7327,7 +7378,9 @@ export default function ReveeNorthApp() {
     }
     if (safeState.user) setUser(safeState.user);
     if (safeState.realBalance) setRealBalance(safeState.realBalance);
-    if (safeState.bills) setBills(safeState.bills);
+    if (safeState.bills) {
+      setBills((current) => preserveBillLogos(safeState.bills!, current));
+    }
     if (safeState.incomes) setIncomes(safeState.incomes);
     if (safeState.goals) setGoals(safeState.goals);
     if (safeState.objectives) setObjectives(safeState.objectives);
@@ -7477,6 +7530,14 @@ export default function ReveeNorthApp() {
     return () => window.clearTimeout(timeout);
   }, [authSession, cloudReady, cloudState]);
 
+  const persistCloudPatchNow = (patch: Partial<ReveeNorthCloudState>) => {
+    const nextState = { ...cloudState, ...patch };
+    localStorage.setItem("reveenorth:app-state", JSON.stringify(nextState));
+    if (authSession && cloudReady) {
+      saveCloudState(authSession, nextState).catch(() => undefined);
+    }
+  };
+
   const data = useMemo<MonthData>(() => {
     const selectedDate = new Date(`${selectedMonth}-01T12:00:00`);
     const previousDate = new Date(
@@ -7503,7 +7564,7 @@ export default function ReveeNorthApp() {
   const achievements = useMemo(() => buildAchievements(data, metrics), [data, metrics]);
   const checkup = useMemo(() => buildMonthlyCheckup(data, metrics, goals), [data, goals, metrics]);
   const nextMonthAdvice = metrics.overdueBills.length
-    ? "Para melhorar o próximo mês: quite as contas atrasadas primeiro, separe pelo menos R$ 250 para reserva e evite direcionar dinheiro para metas antes de resolver pendências."
+    ? "Para melhorar o próximo mês: quite as contas atrasadas primeiro e evite direcionar dinheiro para metas antes de resolver pendências."
     : "Para melhorar o próximo mês: mantenha o registro das entradas, proteja uma parte para o futuro e revise seus gastos flexíveis antes de novas compras.";
   const copy = viewCopy[active];
   const greeting = useMemo(() => {
@@ -7576,8 +7637,8 @@ export default function ReveeNorthApp() {
   };
 
   const handleSaveBill = (updatedBill: Bill) => {
-    setBills((current) =>
-      ensureFixedBillInstances(
+    setBills((current) => {
+      const nextBills = ensureFixedBillInstances(
         current.map((bill) => {
           const recurrenceId = updatedBill.recurrenceId ?? String(updatedBill.id);
           if (bill.id === updatedBill.id) {
@@ -7592,8 +7653,12 @@ export default function ReveeNorthApp() {
           return bill;
         }),
         accountCreatedAt,
-      ),
-    );
+      );
+      const freshBill = nextBills.find((bill) => bill.id === updatedBill.id);
+      if (freshBill) setSelectedBill(freshBill);
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
   };
 
   const handleDeleteBill = (id: number) => {
