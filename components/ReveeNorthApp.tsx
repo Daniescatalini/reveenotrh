@@ -2718,11 +2718,11 @@ function BillsView({
             className="relative min-h-[138px] overflow-hidden rounded-[26px] border bg-[linear-gradient(145deg,rgba(255,255,255,.86),rgba(247,244,240,.62))] p-4 text-[#211d19] backdrop-blur-2xl dark:bg-white/6 dark:text-white"
             style={{
               borderColor: `${item.accent}55`,
-              boxShadow: `0 16px 42px rgba(33,29,25,.06), 0 0 0 1px ${item.accent}18, 0 0 24px ${item.accent}20`,
+              boxShadow: `0 8px 22px rgba(33,29,25,.035), 0 0 0 1px ${item.accent}14`,
             }}
           >
             <span className="absolute inset-x-4 top-0 h-px bg-white/80" />
-            <span className="absolute -right-12 -top-12 h-28 w-28 rounded-full opacity-25 blur-2xl" style={{ background: item.accent }} />
+            <span className="absolute -right-12 -top-12 h-28 w-28 rounded-full opacity-10 blur-2xl" style={{ background: item.accent }} />
             <span className="absolute bottom-0 left-6 right-6 h-px opacity-70" style={{ background: `linear-gradient(90deg, transparent, ${item.accent}, transparent)` }} />
             <span className={`relative flex h-9 w-9 items-center justify-center rounded-2xl ${item.soft}`}>
               <Icon className="h-4 w-4" />
