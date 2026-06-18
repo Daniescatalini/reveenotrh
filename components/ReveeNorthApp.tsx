@@ -2728,6 +2728,7 @@ function BillsView({
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
   const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill.id));
   const selectedTotal = sum(selectedBills, (bill) => bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount);
+  const allFilteredSelected = filteredBills.length > 0 && filteredBills.every((bill) => selectedBillIds.includes(bill.id));
   const toggleBillSelection = (id: number) => {
     setSelectedBillIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
@@ -2795,6 +2796,65 @@ function BillsView({
         ))}
       </div>
 
+      <Card className="p-3 lg:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Ferramentas</p>
+            <p className="mt-1 text-sm font-black">
+              {formatCurrency(selectedTotal)}
+              <span className="ml-2 text-xs font-bold text-[var(--muted)]">
+                {selectedBills.length} conta(s) selecionada(s)
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedBillIds((current) =>
+                  allFilteredSelected
+                    ? current.filter((id) => !filteredBills.some((bill) => bill.id === id))
+                    : Array.from(new Set([...current, ...filteredBills.map((bill) => bill.id)])),
+                )
+              }
+              className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold"
+            >
+              {allFilteredSelected ? "Desmarcar tudo" : "Selecionar tudo"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedBillIds([])}
+              disabled={!selectedBills.length}
+              className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDuplicateBills(selectedBillIds);
+                setSelectedBillIds([]);
+              }}
+              disabled={!selectedBills.length}
+              className="rounded-2xl border border-[#d75c27]/25 px-4 py-2.5 text-xs font-extrabold text-[#d75c27] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Duplicar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDeleteBills(selectedBillIds);
+                setSelectedBillIds([]);
+              }}
+              disabled={!selectedBills.length}
+              className="rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Excluir
+            </button>
+          </div>
+        </div>
+      </Card>
+
       {alertBills.length ? (
         <Card className="border-red-500/20 bg-red-500/8 p-4 lg:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -2810,10 +2870,9 @@ function BillsView({
                 type="button"
                 key={bill.id}
                 onClick={() => onOpenBill(bill)}
-                className="grid w-full gap-3 rounded-2xl border border-red-500/15 bg-white/75 p-3 text-left shadow-sm transition hover:bg-white dark:bg-white/8 sm:grid-cols-[44px_1fr_auto] sm:items-center"
+                className="grid w-full gap-3 rounded-2xl border border-red-500/15 bg-white/75 p-3 text-left shadow-sm transition hover:bg-white dark:bg-white/8 md:grid-cols-[28px_50px_minmax(0,1fr)_auto] md:items-center"
               >
-                <span className="relative flex items-center gap-2">
-                  <span
+                <span
                     role="checkbox"
                     aria-checked={selectedBillIds.includes(bill.id)}
                     tabIndex={0}
@@ -2835,8 +2894,8 @@ function BillsView({
                     }`}
                   >
                     <Check className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="relative">
+                </span>
+                <span className="relative">
                   <CategoryBadgeIcon
                     categoryName={bill.category}
                     categories={categories}
@@ -2845,11 +2904,10 @@ function BillsView({
                   <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
                     {index + 1}
                   </span>
-                  </span>
                 </span>
-                <span>
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-extrabold">{bill.name}</span>
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    <span className="min-w-[150px] text-base font-extrabold leading-tight">{bill.name}</span>
                     <StatusPill status={bill.status} />
                     <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-[11px] font-black text-red-600">{overdueLabel(bill)}</span>
                   </span>
@@ -2870,7 +2928,7 @@ function BillsView({
                       onStartPayment(bill);
                     }
                   }}
-                  className="inline-flex justify-center rounded-2xl bg-[#211d19] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27]"
+                  className="inline-flex justify-center rounded-2xl bg-[#211d19] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27] md:justify-self-end"
                 >
                   Paga
                 </span>
@@ -2952,43 +3010,6 @@ function BillsView({
         <Card className="py-10 text-center text-sm font-semibold text-[var(--muted)]">
           Nenhuma conta encontrada neste filtro.
         </Card>
-      ) : null}
-      {selectedBills.length ? (
-        <div className="sticky bottom-4 z-30 rounded-[26px] border border-white/70 bg-[#fbfaf8]/92 p-3 shadow-[0_18px_60px_rgba(33,29,25,.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[#12100f]/92">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">
-                {selectedBills.length} conta(s) selecionada(s)
-              </p>
-              <p className="mt-1 text-xl font-black">{formatCurrency(selectedTotal)}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setSelectedBillIds([])} className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold">
-                Limpar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDuplicateBills(selectedBillIds);
-                  setSelectedBillIds([]);
-                }}
-                className="rounded-2xl border border-[#d75c27]/25 px-4 py-2.5 text-xs font-extrabold text-[#d75c27]"
-              >
-                Duplicar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteBills(selectedBillIds);
-                  setSelectedBillIds([]);
-                }}
-                className="rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-extrabold text-white"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
       ) : null}
     </div>
   );
