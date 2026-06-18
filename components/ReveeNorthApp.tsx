@@ -1592,7 +1592,7 @@ function Sidebar({
           <X className="h-4 w-4" />
         </button>
 
-        <div className={`flex ${collapsed ? "flex-col items-center gap-3" : "items-start justify-between gap-3 pl-0 pr-1"}`}>
+        <div className={`flex ${collapsed ? "flex-col items-center gap-3" : "items-start justify-between gap-5 pl-0 pr-0"}`}>
           <div className={`min-w-0 ${collapsed ? "hidden" : "block"}`}>
             <div className="flex items-center gap-2.5">
               <BrandSymbol className="h-9 w-9 shrink-0" />
@@ -1610,7 +1610,7 @@ function Sidebar({
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/10 text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:bg-white/15 lg:flex"
+            className="hidden h-8 w-8 shrink-0 translate-x-1 items-center justify-center rounded-full border border-white/12 bg-white/10 text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:bg-white/15 lg:flex"
             aria-label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
           >
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -2162,6 +2162,7 @@ function Dashboard({
   metrics,
   onStartPayment,
   onOpenBill,
+  onOpenReserve,
   categories,
   realBalance,
   onOpenRealBalance,
@@ -2172,6 +2173,7 @@ function Dashboard({
   metrics: ReturnType<typeof buildMetrics>;
   onStartPayment: (bill: Bill) => void;
   onOpenBill: (bill: Bill) => void;
+  onOpenReserve: (goal: Goal) => void;
   categories: Category[];
   realBalance: RealBalance;
   onOpenRealBalance: () => void;
@@ -2301,8 +2303,8 @@ function Dashboard({
         />
         <DashboardMetricCard
           label="Pendências"
-          value={`${metrics.pendingBills.length + metrics.overdueBills.length} contas`}
-          helper={`Total: ${formatCurrency(pendingTotal)}`}
+          value={formatCurrency(pendingTotal)}
+          helper={`${metrics.pendingBills.length + metrics.overdueBills.length} conta(s) a pagar`}
           detail={metrics.urgent ? `Próxima: ${metrics.urgent.name} • ${urgentLabel}` : "Sem vencimento urgente"}
           icon={ReceiptText}
           tone="red"
@@ -2317,7 +2319,7 @@ function Dashboard({
           detail={reserveGoal ? `${reserveProgress}% da meta` : undefined}
           icon={PiggyBank}
           tone="purple"
-          onClick={reserveGoal ? () => onOpenFinanceDetail(buildFinanceDetail("Reserva", data, metrics, realBalance)) : undefined}
+          onClick={reserveGoal ? () => onOpenReserve(reserveGoal) : undefined}
         >
           <div className="mt-6 h-3 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
             <div
@@ -2567,6 +2569,7 @@ function IncomesView({
 }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const incomeGroups = ["Salário mensal", "Renda extra", "Bônus"];
+  const totalIncome = sum(incomes, (income) => income.amount);
   const categoryTotals = incomeGroups.map((label) => {
     const items = incomes.filter((income) => income.category === label);
     return {
@@ -2582,7 +2585,20 @@ function IncomesView({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr_1fr_1fr]">
+        <button
+          type="button"
+          onClick={() => setSelectedCategory(null)}
+          className="rounded-3xl border border-[#d75c27]/25 bg-[#d75c27]/10 p-4 text-left shadow-[0_14px_42px_rgba(33,29,25,0.05)] backdrop-blur-xl transition hover:-translate-y-0.5"
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">
+            Total de entradas
+          </p>
+          <p className="mt-2 text-2xl font-black">{formatCurrency(totalIncome)}</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+            {incomes.length} recebimento(s) no mês
+          </p>
+        </button>
         {categoryTotals.map((category) => (
           <button
             type="button"
@@ -2679,15 +2695,20 @@ function BillsView({
   bills,
   onStartPayment,
   onOpenBill,
+  onDeleteBills,
+  onDuplicateBills,
   categories,
 }: {
   bills: Bill[];
   onStartPayment: (bill: Bill) => void;
   onOpenBill: (bill: Bill) => void;
+  onDeleteBills: (ids: number[]) => void;
+  onDuplicateBills: (ids: number[]) => void;
   categories: Category[];
 }) {
   const [status, setStatus] = useState<BillStatus | "todas">("todas");
   const [category, setCategory] = useState("todas");
+  const [selectedBillIds, setSelectedBillIds] = useState<number[]>([]);
   const billCategories = [
     "todas",
     ...sortedCategories(categories, "conta", true).map((item) => item.name),
@@ -2705,13 +2726,17 @@ function BillsView({
   const regularBills = [...pendingBills, ...completedBills];
   const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
+  const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill.id));
+  const selectedTotal = sum(selectedBills, (bill) => bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount);
+  const toggleBillSelection = (id: number) => {
+    setSelectedBillIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  };
   const summaryItems = [
-    { label: "Total de contas do mês", value: String(bills.length), helper: "inclui atrasadas antigas", icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
-    { label: "Contas pagas", value: String(paidBills.length), helper: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), icon: Check, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
-    { label: "Contas pendentes", value: String(pendingOrOverdueBills.length), helper: `${alertBills.length} em atraso`, icon: CircleAlert, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
-    { label: "Valor total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: "compromissos do período", icon: CalendarDays, accent: "#8a6a55", soft: "bg-[#8a6a55]/10 text-[#6d5344]" },
-    { label: "Valor já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: "pagamentos registrados", icon: Wallet, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
-    { label: "Valor faltante", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: "ainda não pago", icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
+    { label: "Total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: `${bills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
+    { label: "Já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: `${paidBills.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
+    { label: "Falta pagar", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: `${pendingOrOverdueBills.length} conta(s) abertas`, icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
   ];
 
   return (
@@ -2747,7 +2772,7 @@ function BillsView({
         </div>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-3">
         {summaryItems.map(({ icon: Icon, ...item }) => (
           <div
             key={item.label}
@@ -2787,7 +2812,31 @@ function BillsView({
                 onClick={() => onOpenBill(bill)}
                 className="grid w-full gap-3 rounded-2xl border border-red-500/15 bg-white/75 p-3 text-left shadow-sm transition hover:bg-white dark:bg-white/8 sm:grid-cols-[44px_1fr_auto] sm:items-center"
               >
-                <span className="relative">
+                <span className="relative flex items-center gap-2">
+                  <span
+                    role="checkbox"
+                    aria-checked={selectedBillIds.includes(bill.id)}
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleBillSelection(bill.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleBillSelection(bill.id);
+                      }
+                    }}
+                    className={`flex h-6 w-6 items-center justify-center rounded-lg border transition ${
+                      selectedBillIds.includes(bill.id)
+                        ? "border-[#d75c27] bg-[#d75c27] text-white"
+                        : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
+                    }`}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="relative">
                   <CategoryBadgeIcon
                     categoryName={bill.category}
                     categories={categories}
@@ -2795,6 +2844,7 @@ function BillsView({
                   />
                   <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
                     {index + 1}
+                  </span>
                   </span>
                 </span>
                 <span>
@@ -2842,6 +2892,21 @@ function BillsView({
             className="grid w-full cursor-pointer gap-4 text-left xl:grid-cols-[1.1fr_0.65fr_0.7fr_0.8fr_auto] xl:items-center"
           >
             <div className="flex items-start gap-3">
+              <button
+                type="button"
+                aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleBillSelection(bill.id);
+                }}
+                className={`mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition ${
+                  selectedBillIds.includes(bill.id)
+                    ? "border-[#d75c27] bg-[#d75c27] text-white"
+                    : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
+                }`}
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
               <CategoryBadgeIcon
                 categoryName={bill.category}
                 categories={categories}
@@ -2887,6 +2952,43 @@ function BillsView({
         <Card className="py-10 text-center text-sm font-semibold text-[var(--muted)]">
           Nenhuma conta encontrada neste filtro.
         </Card>
+      ) : null}
+      {selectedBills.length ? (
+        <div className="sticky bottom-4 z-30 rounded-[26px] border border-white/70 bg-[#fbfaf8]/92 p-3 shadow-[0_18px_60px_rgba(33,29,25,.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[#12100f]/92">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">
+                {selectedBills.length} conta(s) selecionada(s)
+              </p>
+              <p className="mt-1 text-xl font-black">{formatCurrency(selectedTotal)}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSelectedBillIds([])} className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold">
+                Limpar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDuplicateBills(selectedBillIds);
+                  setSelectedBillIds([]);
+                }}
+                className="rounded-2xl border border-[#d75c27]/25 px-4 py-2.5 text-xs font-extrabold text-[#d75c27]"
+              >
+                Duplicar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteBills(selectedBillIds);
+                  setSelectedBillIds([]);
+                }}
+                className="rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-extrabold text-white"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -4623,10 +4725,15 @@ function AccountModal({
           value={draft.paidDate ?? ""}
           onChange={(value) => update({ paidDate: value })}
         />
-        <label className="block">
+        <label className="block md:col-span-2">
           <span className="text-xs font-bold text-[var(--muted)]">Conta fixa</span>
-          <div className="mt-2 flex min-h-[46px] items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
-            <span className="text-sm font-semibold">{draft.fixed ? "Ativa" : "Inativa"}</span>
+          <div className="mt-2 flex items-center justify-between rounded-2xl border border-[var(--line)] bg-white/35 p-2.5 dark:bg-white/5">
+            <span>
+              <span className="block text-sm font-extrabold">{draft.fixed ? "Repetição ativa" : "Sem repetição"}</span>
+              <span className="mt-0.5 block text-[11px] font-semibold text-[var(--muted)]">
+                {draft.fixed ? "Cria os próximos meses automaticamente." : "Aparece só neste mês."}
+              </span>
+            </span>
             <Toggle
               checked={Boolean(draft.fixed)}
               onChange={(fixed) => update({ fixed, repeatMonths: fixed ? draft.repeatMonths ?? "indefinido" : undefined })}
@@ -4636,8 +4743,8 @@ function AccountModal({
       </div>
 
       {draft.fixed ? (
-        <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/32 p-3 dark:bg-white/5">
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_120px]">
+        <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/28 p-2.5 dark:bg-white/5">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
             <button
               type="button"
               onClick={() => update({ repeatMonths: "indefinido" })}
@@ -4649,28 +4756,28 @@ function AccountModal({
             >
               Repetir sem fim
             </button>
-            <button
-              type="button"
-              onClick={() => update({ repeatMonths: typeof draft.repeatMonths === "number" ? draft.repeatMonths : 6 })}
-              className={`rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
-                finiteRepeat
-                  ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
-                  : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
-              }`}
-            >
-              Por meses
-            </button>
-            <label className={finiteRepeat ? "block" : "pointer-events-none opacity-45"}>
-              <span className="sr-only">Quantidade de meses</span>
+            <div className={`flex rounded-xl border transition ${
+              finiteRepeat
+                ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
+                : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
+            }`}>
+              <button
+                type="button"
+                onClick={() => update({ repeatMonths: typeof draft.repeatMonths === "number" ? draft.repeatMonths : 6 })}
+                className="flex-1 px-3 py-2 text-xs font-extrabold"
+              >
+                Por meses
+              </button>
               <input
                 type="text"
                 inputMode="numeric"
                 value={finiteRepeat ? String(draft.repeatMonths) : ""}
                 onChange={(event) => update({ repeatMonths: Math.max(1, parseInt(event.target.value.replace(/\D/g, "") || "1", 10)) })}
-                placeholder="6 meses"
-                className="h-full min-h-[38px] w-full rounded-xl border border-[var(--line)] bg-white/55 px-3 text-center text-xs font-extrabold outline-none focus:border-[#d75c27] dark:bg-white/8"
+                onFocus={() => !finiteRepeat && update({ repeatMonths: 6 })}
+                placeholder="6"
+                className="min-h-[36px] w-16 rounded-r-xl border-l border-[var(--line)] bg-white/45 px-2 text-center text-xs font-extrabold outline-none placeholder:text-[var(--muted)] dark:bg-white/7"
               />
-            </label>
+            </div>
           </div>
           <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">
             Cada mês pode ter valor próprio sem alterar os outros.
@@ -4740,7 +4847,7 @@ function IncomeModal({
     source: "",
     category: sortedCategories(categories, "entrada", true)[0]?.name ?? "Salario",
     amount: 0,
-    receivedDate: getReferenceDate(selectedMonth),
+    receivedDate: getTodayKey(),
     note: "",
   });
 
@@ -4867,17 +4974,22 @@ function BillModalCreate({
         </label>
         <MoneyInput label="Valor previsto" value={draft.expectedAmount} onChange={(expectedAmount) => update({ expectedAmount })} />
         <TextInput label="Vencimento" type="date" value={draft.dueDate} onChange={(dueDate) => update({ dueDate })} />
-        <label className="block">
+        <label className="block md:col-span-2">
           <span className="text-xs font-bold text-[var(--muted)]">Conta fixa</span>
-          <div className="mt-2 flex min-h-[46px] items-center justify-between rounded-xl border border-[var(--line)] bg-white/35 px-3 py-2.5 dark:bg-white/5">
-            <span className="text-sm font-semibold">{draft.fixed ? "Ativa" : "Inativa"}</span>
+          <div className="mt-2 flex items-center justify-between rounded-2xl border border-[var(--line)] bg-white/35 p-2.5 dark:bg-white/5">
+            <span>
+              <span className="block text-sm font-extrabold">{draft.fixed ? "Repetição ativa" : "Sem repetição"}</span>
+              <span className="mt-0.5 block text-[11px] font-semibold text-[var(--muted)]">
+                {draft.fixed ? "Cria os próximos meses automaticamente." : "Aparece só neste mês."}
+              </span>
+            </span>
             <Toggle checked={Boolean(draft.fixed)} onChange={(fixed) => update({ fixed, repeatMonths: fixed ? draft.repeatMonths ?? "indefinido" : undefined })} />
           </div>
         </label>
       </div>
       {draft.fixed ? (
-        <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/32 p-3 dark:bg-white/5">
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_120px]">
+        <div className="mt-3 rounded-2xl border border-[var(--line)] bg-white/28 p-2.5 dark:bg-white/5">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
             <button
               type="button"
               onClick={() => update({ repeatMonths: "indefinido" })}
@@ -4889,28 +5001,28 @@ function BillModalCreate({
             >
               Repetir sem fim
             </button>
-            <button
-              type="button"
-              onClick={() => update({ repeatMonths: typeof draft.repeatMonths === "number" ? draft.repeatMonths : 6 })}
-              className={`rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
-                finiteRepeat
-                  ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
-                  : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
-              }`}
-            >
-              Por meses
-            </button>
-            <label className={finiteRepeat ? "block" : "pointer-events-none opacity-45"}>
-              <span className="sr-only">Quantidade de meses</span>
+            <div className={`flex rounded-xl border transition ${
+              finiteRepeat
+                ? "border-[#d75c27] bg-[#d75c27]/10 text-[#d75c27]"
+                : "border-[var(--line)] bg-white/35 text-[var(--muted)] dark:bg-white/5"
+            }`}>
+              <button
+                type="button"
+                onClick={() => update({ repeatMonths: typeof draft.repeatMonths === "number" ? draft.repeatMonths : 6 })}
+                className="flex-1 px-3 py-2 text-xs font-extrabold"
+              >
+                Por meses
+              </button>
               <input
                 type="text"
                 inputMode="numeric"
                 value={finiteRepeat ? String(draft.repeatMonths) : ""}
                 onChange={(event) => update({ repeatMonths: Math.max(1, parseInt(event.target.value.replace(/\D/g, "") || "1", 10)) })}
-                placeholder="6 meses"
-                className="h-full min-h-[38px] w-full rounded-xl border border-[var(--line)] bg-white/55 px-3 text-center text-xs font-extrabold outline-none focus:border-[#d75c27] dark:bg-white/8"
+                onFocus={() => !finiteRepeat && update({ repeatMonths: 6 })}
+                placeholder="6"
+                className="min-h-[36px] w-16 rounded-r-xl border-l border-[var(--line)] bg-white/45 px-2 text-center text-xs font-extrabold outline-none placeholder:text-[var(--muted)] dark:bg-white/7"
               />
-            </label>
+            </div>
           </div>
           <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">
             Use sem fim para luz/internet ou meses contados para parcelas.
@@ -4980,7 +5092,7 @@ function PaymentModal({
   onConfirm: (id: number, paidAmount: number, paidDate: string, note: string) => void;
 }) {
   const [paidAmount, setPaidAmount] = useState(bill.expectedAmount);
-  const [paidDate, setPaidDate] = useState(getReferenceDate(monthKey(bill.dueDate)));
+  const [paidDate, setPaidDate] = useState(getTodayKey());
   const [note, setNote] = useState("");
 
   return (
@@ -5040,31 +5152,59 @@ function PaymentModal({
 
 function IncomeDetailModal({
   income,
+  categories,
   onClose,
+  onSave,
   onDelete,
 }: {
   income: Income;
+  categories: Category[];
   onClose: () => void;
+  onSave: (income: Income) => void;
   onDelete: (id: number) => void;
 }) {
+  const [draft, setDraft] = useState(income);
+
   return (
-    <Modal title="Detalhes da entrada" onClose={onClose}>
-      <div className="rounded-3xl border border-[var(--line)] bg-white/35 p-5 dark:bg-white/5">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d75c27]">
-          {income.category}
-        </p>
-        <h3 className="mt-2 text-2xl font-extrabold">{income.name}</h3>
-        <p className="mt-4 text-3xl font-extrabold text-[#d75c27]">
-          {formatCurrency(income.amount)}
-        </p>
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
-          <Field label="Data de recebimento" value={formatDate(income.receivedDate)} />
-          <Field label="Origem" value={income.source || "Não informada"} />
-        </div>
-        <p className="mt-5 rounded-2xl bg-[#211d19]/6 p-4 text-sm font-semibold leading-6 text-[var(--muted)] dark:bg-white/7">
-          {income.note || "Sem observação."}
-        </p>
+    <Modal title="Editar entrada" onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput
+          label="Origem"
+          value={draft.source}
+          onChange={(source) => setDraft((current) => ({ ...current, source, name: source || current.name }))}
+        />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Categoria</span>
+          <select
+            value={draft.category}
+            onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}
+            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
+          >
+            {sortedCategories(categories, "entrada", true).map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+        <MoneyInput
+          label="Valor"
+          value={draft.amount}
+          onChange={(amount) => setDraft((current) => ({ ...current, amount }))}
+        />
+        <TextInput
+          label="Data que entrou"
+          type="date"
+          value={draft.receivedDate}
+          onChange={(receivedDate) => setDraft((current) => ({ ...current, receivedDate }))}
+        />
       </div>
+      <label className="mt-4 block">
+        <span className="text-xs font-bold text-[var(--muted)]">Observação</span>
+        <textarea
+          value={draft.note}
+          onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
+          className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
+        />
+      </label>
       <div className="mt-5 flex flex-wrap justify-between gap-3">
         <button
           type="button"
@@ -5079,18 +5219,89 @@ function IncomeDetailModal({
         <div className="flex gap-3">
           <button
             type="button"
-            className="rounded-2xl border border-[var(--line)] px-5 py-2.5 text-xs font-extrabold"
+            onClick={() => {
+              const source = draft.source.trim() || "Entrada sem origem";
+              onSave({ ...draft, source, name: source });
+              onClose();
+            }}
+            className="rounded-2xl bg-[#d75c27] px-5 py-2.5 text-xs font-extrabold text-white"
           >
-            Editar
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-2xl bg-[#211d19] px-5 py-2.5 text-xs font-extrabold text-white dark:bg-[#d75c27]"
-          >
-            Fechar
+            Salvar alterações
           </button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ReserveTransactionModal({
+  goal,
+  onClose,
+  onSave,
+}: {
+  goal: Goal;
+  onClose: () => void;
+  onSave: (goal: Goal) => void;
+}) {
+  const [mode, setMode] = useState<"deposito" | "resgate">("deposito");
+  const [amount, setAmount] = useState(0);
+  const [date, setDate] = useState(getTodayKey());
+  const nextValue = mode === "deposito"
+    ? goal.current + amount
+    : Math.max(0, goal.current - amount);
+  const progress = Math.round((nextValue / Math.max(goal.target, 1)) * 100);
+
+  return (
+    <Modal title="Reserva de emergência" onClose={onClose}>
+      <div className="rounded-3xl border border-[var(--line)] bg-white/35 p-5 dark:bg-white/5">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d75c27]">Saldo guardado</p>
+        <p className="mt-2 text-3xl font-black">{formatCurrency(goal.current)}</p>
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
+          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-[#d75c27]" style={{ width: `${Math.min(progress, 100)}%` }} />
+        </div>
+        <p className="mt-2 text-xs font-bold text-[var(--muted)]">Meta: {formatCurrency(goal.target)}</p>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setMode("deposito")}
+          className={`rounded-2xl border px-4 py-3 text-xs font-extrabold ${mode === "deposito" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" : "border-[var(--line)]"}`}
+        >
+          Depositar
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("resgate")}
+          className={`rounded-2xl border px-4 py-3 text-xs font-extrabold ${mode === "resgate" ? "border-[#d75c27]/30 bg-[#d75c27]/10 text-[#d75c27]" : "border-[var(--line)]"}`}
+        >
+          Resgatar
+        </button>
+        <MoneyInput label="Valor" value={amount} onChange={setAmount} />
+        <TextInput label="Data" type="date" value={date} onChange={setDate} />
+      </div>
+      <p className="mt-3 text-xs font-semibold leading-5 text-[var(--muted)]">
+        Depois dessa movimentação, a reserva ficará em {formatCurrency(nextValue)}.
+      </p>
+      <div className="mt-5 flex justify-end gap-3">
+        <button type="button" onClick={onClose} className="rounded-2xl border border-[var(--line)] px-5 py-2.5 text-xs font-extrabold">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const label = mode === "deposito" ? "Depósito" : "Resgate";
+            const movement = `${label} de ${formatCurrency(amount)} em ${formatDate(date)}`;
+            onSave({
+              ...goal,
+              current: nextValue,
+              note: `${goal.note ? `${goal.note}\n` : ""}${movement}`,
+            });
+            onClose();
+          }}
+          className="rounded-2xl bg-[#d75c27] px-5 py-2.5 text-xs font-extrabold text-white"
+        >
+          Salvar movimentação
+        </button>
       </div>
     </Modal>
   );
@@ -6023,6 +6234,7 @@ function SettingsView({
             incomes={allIncomes}
             bills={allBills}
             goals={allGoals}
+            categories={categories}
             realBalance={realBalance}
             user={user}
           />
@@ -6498,12 +6710,14 @@ function DataPanel({
   incomes,
   bills,
   goals,
+  categories,
   realBalance,
   user,
 }: {
   incomes: Income[];
   bills: Bill[];
   goals: Goal[];
+  categories: Category[];
   realBalance: RealBalance;
   user: UserProfile;
 }) {
@@ -6538,6 +6752,11 @@ function DataPanel({
     return acc;
   }, {});
   const topCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topCategoryItems = topCategories.map(([label, value]) => ({
+    label,
+    value,
+    color: findCategory(categories, label, "conta")?.color ?? "#d75c27",
+  }));
   const monthSeries = options
     .filter((option) => option.value >= fromMonth && option.value <= toMonth)
     .map((option) => {
@@ -6563,7 +6782,7 @@ function DataPanel({
     }
     setEmptyMessage(false);
     const maxSeries = Math.max(...monthSeries.flatMap((item) => [item.entradas, item.saidas, item.guardado]), 1);
-    const maxCategory = Math.max(...topCategories.map((item) => item[1]), 1);
+    const maxCategory = Math.max(...topCategoryItems.map((item) => item.value), 1);
     const origin = window.location.origin;
     const logoSrc = `${origin}/logo-reveenorth.png`;
     const symbolSrc = `${origin}/simbolo-reveenorth.png`;
@@ -6572,7 +6791,7 @@ function DataPanel({
         <head>
           <title>Relatório ReveeNorth</title>
           <style>
-            *{box-sizing:border-box}
+            *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
             body{font-family:Montserrat,Arial,sans-serif;margin:0;background:#efefef;color:#211d19}
             .page{max-width:1040px;margin:22px auto;background:#fff;border-radius:30px;padding:30px;box-shadow:0 24px 70px rgba(33,29,25,.12)}
             .top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
@@ -6596,11 +6815,16 @@ function DataPanel({
             .panel{border:1px solid #eee7e1;border-radius:24px;padding:18px;margin-top:12px;background:#fff}
             .row{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin:12px 0}
             .track{height:10px;border-radius:999px;background:#efefef;overflow:hidden}.fill{height:100%;border-radius:999px;background:#d75c27}
+            .categoryRow{display:grid;grid-template-columns:150px 1fr 64px;gap:12px;align-items:center;margin:13px 0}
+            .categoryName{display:flex;align-items:center;gap:8px;font-weight:900}
+            .dot{display:inline-block;width:10px;height:10px;border-radius:999px;box-shadow:0 0 0 4px rgba(33,29,25,.04)}
+            .amount{text-align:right;font-weight:900;color:#756b62;font-size:12px}
             .triple{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.mini{height:8px;border-radius:999px;background:#efefef;overflow:hidden;margin-top:6px}
             .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
             .recommendation{border-radius:22px;background:linear-gradient(135deg,#211d19,#5a321f);color:#fff;padding:18px;margin-top:14px}
             .recommendation p{color:rgba(255,255,255,.78);margin:6px 0 0}
-            @media print{body{background:white}.page{box-shadow:none;margin:0;max-width:none;border-radius:0}.hero{break-inside:avoid}.card,.panel{break-inside:avoid}}
+            @page{size:A4;margin:10mm}
+            @media print{body{background:#efefef}.page{box-shadow:none;margin:0 auto;max-width:1040px;border-radius:30px}.hero{break-inside:avoid}.card,.panel,.recommendation{break-inside:avoid}}
           </style>
         </head>
         <body>
@@ -6647,7 +6871,7 @@ function DataPanel({
               <section>
                 <h2>Categorias com maior impacto</h2>
                 <div class="panel">
-              ${topCategories.map(([label, value]) => `<div class="row"><strong>${label}</strong><div class="track"><div class="fill" style="width:${(value / maxCategory) * 100}%"></div></div></div>`).join("") || "<p>Nenhuma categoria no período.</p>"}
+              ${topCategoryItems.map((item) => `<div class="categoryRow"><div class="categoryName"><span class="dot" style="background:${item.color}"></span>${item.label}</div><div class="track"><div class="fill" style="width:${(item.value / maxCategory) * 100}%;background:${item.color}"></div></div><div class="amount">${formatCurrency(item.value)}</div></div>`).join("") || "<p>Nenhuma categoria no período.</p>"}
                 </div>
               </section>
             </div>
@@ -6668,7 +6892,7 @@ function DataPanel({
     if (!win) return;
     win.document.write(html);
     win.document.close();
-    win.print();
+    window.setTimeout(() => win.print(), 350);
     setModalOpen(false);
   };
 
@@ -7301,6 +7525,8 @@ function ActiveView({
   metrics,
   onStartPayment,
   onOpenBill,
+  onDeleteBills,
+  onDuplicateBills,
   categories,
   setCategories,
   settingsSection,
@@ -7324,6 +7550,7 @@ function ActiveView({
   onOpenRealBalance,
   onOpenFinanceDetail,
   onOpenRecommendation,
+  onOpenReserve,
   onOpenDataSettings,
   onOpenIncome,
   onOpenGoal,
@@ -7341,6 +7568,8 @@ function ActiveView({
   metrics: ReturnType<typeof buildMetrics>;
   onStartPayment: (bill: Bill) => void;
   onOpenBill: (bill: Bill) => void;
+  onDeleteBills: (ids: number[]) => void;
+  onDuplicateBills: (ids: number[]) => void;
   categories: Category[];
   setCategories: Dispatch<SetStateAction<Category[]>>;
   settingsSection: string | null;
@@ -7364,6 +7593,7 @@ function ActiveView({
   onOpenRealBalance: () => void;
   onOpenFinanceDetail: (detail: FinanceDetail) => void;
   onOpenRecommendation: () => void;
+  onOpenReserve: (goal: Goal) => void;
   onOpenDataSettings: () => void;
   onOpenIncome: (income: Income) => void;
   onOpenGoal: (goal: Goal) => void;
@@ -7383,6 +7613,7 @@ function ActiveView({
         metrics={metrics}
         onStartPayment={onStartPayment}
         onOpenBill={onOpenBill}
+        onOpenReserve={onOpenReserve}
         categories={categories}
         realBalance={realBalance}
         onOpenRealBalance={onOpenRealBalance}
@@ -7400,6 +7631,8 @@ function ActiveView({
         bills={data.bills}
         onStartPayment={onStartPayment}
         onOpenBill={onOpenBill}
+        onDeleteBills={onDeleteBills}
+        onDuplicateBills={onDuplicateBills}
         categories={categories}
       />
     );
@@ -7535,6 +7768,7 @@ export default function ReveeNorthApp() {
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [reserveGoal, setReserveGoal] = useState<Goal | null>(null);
   const [financeDetail, setFinanceDetail] = useState<FinanceDetail | null>(null);
   const [recommendationModalOpen, setRecommendationModalOpen] = useState(false);
   const [feedbackToast, setFeedbackToast] = useState<FeedbackToast | null>(null);
@@ -7824,15 +8058,15 @@ export default function ReveeNorthApp() {
   };
 
   const handlePayBill = (id: number) => {
-    setBills((current) =>
-      current.map((bill) =>
+    setBills((current) => {
+      const nextBills = current.map((bill) =>
         bill.id === id && bill.status !== "paga"
           ? (() => {
-              const paidDate = getReferenceDate(selectedMonth);
+              const paidDate = getTodayKey();
               const lateDays = Math.max(0, daysBetween(bill.dueDate, paidDate));
               return {
               ...bill,
-              status: "paga",
+              status: "paga" as BillStatus,
               paidDate,
               paidAmount: bill.expectedAmount,
               paidLateDays: lateDays,
@@ -7842,8 +8076,10 @@ export default function ReveeNorthApp() {
             };
           })()
           : bill,
-      ),
-    );
+      );
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
     showFeedback("Conta paga.", "Menos uma preocupação para este mês.");
   };
 
@@ -7853,14 +8089,14 @@ export default function ReveeNorthApp() {
     paidDate: string,
     note: string,
   ) => {
-    setBills((current) =>
-      current.map((bill) =>
+    setBills((current) => {
+      const nextBills = current.map((bill) =>
         bill.id === id
           ? (() => {
               const lateDays = Math.max(0, daysBetween(bill.dueDate, paidDate));
               return {
               ...bill,
-              status: "paga",
+              status: "paga" as BillStatus,
               paidDate,
               paidAmount,
               paidLateDays: lateDays,
@@ -7872,8 +8108,10 @@ export default function ReveeNorthApp() {
             };
           })()
           : bill,
-      ),
-    );
+      );
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
     showFeedback("Conta paga.", "Menos uma preocupação para este mês.");
   };
 
@@ -7914,17 +8152,69 @@ export default function ReveeNorthApp() {
   };
 
   const handleDeleteBill = (id: number) => {
-    setBills((current) => current.filter((bill) => bill.id !== id));
+    setBills((current) => {
+      const nextBills = current.filter((bill) => bill.id !== id);
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
+  };
+
+  const handleDeleteBills = (ids: number[]) => {
+    if (!ids.length) return;
+    setBills((current) => {
+      const nextBills = current.filter((bill) => !ids.includes(bill.id));
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
+    showFeedback("Contas excluídas.", `${ids.length} conta(s) removida(s).`);
+  };
+
+  const handleDuplicateBills = (ids: number[]) => {
+    if (!ids.length) return;
+    setBills((current) => {
+      const selected = current.filter((bill) => ids.includes(bill.id));
+      const now = Date.now();
+      const copies = selected.map((bill, index) => normalizeBillStatus({
+        ...bill,
+        id: now + index,
+        name: `${bill.name} cópia`,
+        status: "pendente",
+        paidDate: undefined,
+        paidAmount: undefined,
+        paidLateDays: undefined,
+        fixed: false,
+        repeatMonths: undefined,
+        recurrenceId: undefined,
+        generatedFromId: undefined,
+      }));
+      const nextBills = [...copies, ...current];
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
+    showFeedback("Contas duplicadas.", `${ids.length} conta(s) copiadas com os mesmos dados.`);
   };
 
   const handleCreateIncome = (income: Income) => {
-    setIncomes((current) => [income, ...current]);
+    setIncomes((current) => {
+      const nextIncomes = [income, ...current];
+      persistCloudPatchNow({ incomes: nextIncomes });
+      return nextIncomes;
+    });
     showFeedback("Entrada registrada.", "Agora o North tem mais clareza para te orientar.");
   };
 
+  const handleSaveIncome = (income: Income) => {
+    setIncomes((current) => {
+      const nextIncomes = current.map((item) => (item.id === income.id ? income : item));
+      persistCloudPatchNow({ incomes: nextIncomes });
+      return nextIncomes;
+    });
+    showFeedback("Entrada atualizada.", "As informações foram salvas.");
+  };
+
   const handleCreateBill = (bill: Bill) => {
-    setBills((current) =>
-      ensureFixedBillInstances(
+    setBills((current) => {
+      const nextBills = ensureFixedBillInstances(
         [
           normalizeBillStatus({
             ...bill,
@@ -7934,17 +8224,21 @@ export default function ReveeNorthApp() {
           ...current,
         ],
         accountCreatedAt,
-      ),
-    );
+      );
+      persistCloudPatchNow({ bills: nextBills });
+      return nextBills;
+    });
   };
 
   const handleSaveGoal = (goal: Goal) => {
     const isNew = !goals.some((item) => item.id === goal.id);
     setGoals((current) => {
       const exists = current.some((item) => item.id === goal.id);
-      return exists
+      const nextGoals = exists
         ? current.map((item) => (item.id === goal.id ? goal : item))
         : [goal, ...current];
+      persistCloudPatchNow({ goals: nextGoals });
+      return nextGoals;
     });
     if (isNew) {
       showFeedback("Meta criada.", "Seu futuro acabou de ganhar direção.");
@@ -7952,11 +8246,19 @@ export default function ReveeNorthApp() {
   };
 
   const handleDeleteGoal = (id: number) => {
-    setGoals((current) => current.filter((goal) => goal.id !== id));
+    setGoals((current) => {
+      const nextGoals = current.filter((goal) => goal.id !== id);
+      persistCloudPatchNow({ goals: nextGoals });
+      return nextGoals;
+    });
   };
 
   const handleDeleteIncome = (id: number) => {
-    setIncomes((current) => current.filter((income) => income.id !== id));
+    setIncomes((current) => {
+      const nextIncomes = current.filter((income) => income.id !== id);
+      persistCloudPatchNow({ incomes: nextIncomes });
+      return nextIncomes;
+    });
   };
 
   const handleToggleObjective = (id: number) => {
@@ -8259,6 +8561,8 @@ export default function ReveeNorthApp() {
             metrics={metrics}
             onStartPayment={setPaymentBill}
             onOpenBill={setSelectedBill}
+            onDeleteBills={handleDeleteBills}
+            onDuplicateBills={handleDuplicateBills}
             categories={categories}
             setCategories={setCategories}
             settingsSection={settingsSection}
@@ -8282,6 +8586,7 @@ export default function ReveeNorthApp() {
             onOpenRealBalance={() => setRealBalanceModalOpen(true)}
             onOpenFinanceDetail={setFinanceDetail}
             onOpenRecommendation={() => setRecommendationModalOpen(true)}
+            onOpenReserve={setReserveGoal}
             onOpenDataSettings={() => openSettings("dados")}
             onOpenIncome={setSelectedIncome}
             onOpenGoal={setSelectedGoal}
@@ -8364,7 +8669,9 @@ export default function ReveeNorthApp() {
       {selectedIncome ? (
         <IncomeDetailModal
           income={selectedIncome}
+          categories={categories}
           onClose={() => setSelectedIncome(null)}
+          onSave={handleSaveIncome}
           onDelete={handleDeleteIncome}
         />
       ) : null}
@@ -8382,6 +8689,13 @@ export default function ReveeNorthApp() {
           onClose={() => setSelectedGoal(null)}
           onSave={handleSaveGoal}
           onDelete={handleDeleteGoal}
+        />
+      ) : null}
+      {reserveGoal ? (
+        <ReserveTransactionModal
+          goal={reserveGoal}
+          onClose={() => setReserveGoal(null)}
+          onSave={handleSaveGoal}
         />
       ) : null}
       {goalCreateModalOpen ? (
