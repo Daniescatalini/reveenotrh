@@ -2864,8 +2864,8 @@ function BillsView({
       </Card>
 
       {alertBills.length ? (
-        <Card className="border-red-500/20 bg-red-500/8 p-4 lg:p-5">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <Card className="border-red-500/16 bg-red-500/6 p-5 lg:p-6">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-red-600">Alertas de contas atrasadas</p>
               <h3 className="mt-1 text-lg font-extrabold">Pague primeiro a conta mais antiga em atraso.</h3>
@@ -2882,9 +2882,9 @@ function BillsView({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") onOpenBill(bill);
                 }}
-                className="grid w-full cursor-pointer gap-4 rounded-[1.35rem] border border-red-500/18 bg-white/82 p-4 text-left shadow-sm transition hover:bg-white dark:bg-white/8 xl:grid-cols-[1.1fr_0.65fr_0.7fr_0.8fr_auto] xl:items-center"
+                className="grid w-full cursor-pointer gap-5 rounded-[1.6rem] border border-red-500/14 bg-white/86 p-5 text-left shadow-[0_10px_26px_rgba(120,62,35,.045)] transition hover:border-red-500/24 hover:bg-white dark:bg-white/8 xl:grid-cols-[minmax(350px,1.35fr)_0.55fr_0.6fr_0.7fr_auto] xl:items-center"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex min-w-0 items-start gap-4">
                   <button
                     type="button"
                     aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
@@ -2906,17 +2906,19 @@ function BillsView({
                       categories={categories}
                       logoUrl={bill.logoUrl}
                     />
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white ring-2 ring-white dark:ring-[#0b0908]">
                       {index + 1}
                     </span>
                   </span>
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-extrabold">{bill.name}</h3>
+                    <div className="flex min-w-0 flex-col gap-2">
+                      <h3 className="truncate text-base font-extrabold leading-tight">{bill.name}</h3>
+                      <div className="flex flex-wrap items-center gap-2">
                       <StatusPill status={bill.status} />
-                      <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-[11px] font-black text-red-600">
+                        <span className="rounded-full bg-red-500/9 px-3 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-500/12">
                         {overdueLabel(bill)}
                       </span>
+                      </div>
                     </div>
                     <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
                       {bill.category} • Conta em atraso
@@ -2932,7 +2934,7 @@ function BillsView({
                     event.stopPropagation();
                     onStartPayment(bill);
                   }}
-                  className="w-full rounded-2xl bg-[#211d19] px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27] sm:w-auto"
+                  className="w-full rounded-2xl bg-[#211d19] px-5 py-3 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27] sm:w-auto"
                 >
                   Paga
                 </button>
