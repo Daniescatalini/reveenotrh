@@ -3200,14 +3200,18 @@ function ReportsView({
   const completedObjectives = data.objectives.filter((objective) => objective.done).length;
   const totalObjectives = Math.max(data.objectives.length, 1);
   const moneyDestinationTotal = Math.max(sum(data.bills, (bill) => bill.paidAmount ?? bill.expectedAmount) + totalSaved, 1);
+  const paidBillsInSelectedMonth = allBills.filter(
+    (bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === data.selectedMonth,
+  );
   const categoryTotals = Object.values(
-    metrics.paidBills.reduce<Record<string, { label: string; value: number; color: string; count: number }>>((acc, bill) => {
+    paidBillsInSelectedMonth.reduce<Record<string, { label: string; value: number; color: string; count: number; bills: Bill[] }>>((acc, bill) => {
       const category = findCategory(categories, bill.category, "conta");
       const label = category?.name ?? bill.category;
       const key = normalizeCategoryName(label);
-      acc[key] = acc[key] ?? { label, value: 0, color: category?.color ?? "#d75c27", count: 0 };
+      acc[key] = acc[key] ?? { label, value: 0, color: category?.color ?? "#d75c27", count: 0, bills: [] };
       acc[key].value += bill.paidAmount ?? bill.expectedAmount;
       acc[key].count += 1;
+      acc[key].bills.push(bill);
       acc[key].color = category?.color ?? acc[key].color;
       return acc;
     }, {}),
@@ -3451,7 +3455,22 @@ function ReportsView({
                   <button
                     type="button"
                     key={item.label}
-                    onClick={() => onOpenFinanceDetail(buildFinanceDetail(item.label, data, metrics, realBalance))}
+                    onClick={() => onOpenFinanceDetail({
+                      title: item.label,
+                      value: item.value,
+                      description: "Contas pagas desta categoria no mês selecionado.",
+                      sections: [{
+                        title: "Contas pagas",
+                        total: item.value,
+                        items: item.bills.map((bill) => ({
+                          date: bill.paidDate ?? bill.dueDate,
+                          label: bill.name,
+                          helper: isPaidLate(bill) ? `Pago com ${paidLateDays(bill)} dia(s) de atraso` : "Pago em dia",
+                          amount: bill.paidAmount ?? bill.expectedAmount,
+                          tone: "out" as const,
+                        })),
+                      }],
+                    })}
                     className="group flex w-full items-center justify-between gap-3 rounded-2xl border-b border-[#211d19]/8 px-2 py-2 text-left transition hover:bg-[#211d19]/4 last:border-b-0 dark:border-white/10 dark:hover:bg-white/7"
                   >
                     <span className="flex min-w-0 items-center gap-3">
