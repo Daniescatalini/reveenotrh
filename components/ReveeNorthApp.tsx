@@ -2712,7 +2712,12 @@ function BillsView({
   const [selectedBillIds, setSelectedBillIds] = useState<number[]>([]);
   const billCategories = [
     "todas",
-    ...sortedCategories(categories, "conta", true).map((item) => item.name),
+    ...Array.from(
+      new Set([
+        ...sortedCategories(categories, "conta", true).map((item) => item.name),
+        ...bills.map((bill) => bill.category).filter(Boolean),
+      ]),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })),
   ];
   const filteredBills = bills.filter((bill) => {
     const matchesStatus = status === "todas" || bill.status === status;
@@ -2869,73 +2874,69 @@ function BillsView({
           </div>
           <div className="space-y-3">
             {alertBills.map((bill, index) => (
-              <button
-                type="button"
+              <div
                 key={bill.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenBill(bill)}
-                className="grid w-full gap-3 rounded-2xl border border-red-500/15 bg-white/75 p-3 text-left shadow-sm transition hover:bg-white dark:bg-white/8 md:grid-cols-[28px_50px_minmax(0,1fr)_auto] md:items-center"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onOpenBill(bill);
+                }}
+                className="grid w-full cursor-pointer gap-4 rounded-[1.35rem] border border-red-500/18 bg-white/82 p-4 text-left shadow-sm transition hover:bg-white dark:bg-white/8 xl:grid-cols-[1.1fr_0.65fr_0.7fr_0.8fr_auto] xl:items-center"
               >
-                <span
-                    role="checkbox"
-                    aria-checked={selectedBillIds.includes(bill.id)}
-                    tabIndex={0}
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
                     onClick={(event) => {
                       event.stopPropagation();
                       toggleBillSelection(bill.id);
                     }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        toggleBillSelection(bill.id);
-                      }
-                    }}
-                    className={`flex h-6 w-6 items-center justify-center rounded-lg border transition ${
+                    className={`mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition ${
                       selectedBillIds.includes(bill.id)
                         ? "border-[#d75c27] bg-[#d75c27] text-white"
                         : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
                     }`}
                   >
                     <Check className="h-3.5 w-3.5" />
-                </span>
-                <span className="relative">
-                  <CategoryBadgeIcon
-                    categoryName={bill.category}
-                    categories={categories}
-                    logoUrl={bill.logoUrl}
-                  />
-                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
-                    {index + 1}
+                  </button>
+                  <span className="relative shrink-0">
+                    <CategoryBadgeIcon
+                      categoryName={bill.category}
+                      categories={categories}
+                      logoUrl={bill.logoUrl}
+                    />
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
+                      {index + 1}
+                    </span>
                   </span>
-                </span>
-                <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-                    <span className="min-w-[150px] text-base font-extrabold leading-tight">{bill.name}</span>
-                    <StatusPill status={bill.status} />
-                    <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-[11px] font-black text-red-600">{overdueLabel(bill)}</span>
-                  </span>
-                  <span className="mt-1 block text-xs font-semibold text-[var(--muted)]">
-                    {formatCurrency(bill.expectedAmount)} • venceu em {formatDate(bill.dueDate)}
-                  </span>
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-extrabold">{bill.name}</h3>
+                      <StatusPill status={bill.status} />
+                      <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-[11px] font-black text-red-600">
+                        {overdueLabel(bill)}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                      {bill.category} • Conta em atraso
+                    </p>
+                  </div>
+                </div>
+                <Field label="Vencimento" value={formatDate(bill.dueDate)} />
+                <Field label="Previsto" value={formatCurrency(bill.expectedAmount)} />
+                <Field label="Pagamento" value="Ainda não pago" />
+                <button
+                  type="button"
                   onClick={(event) => {
                     event.stopPropagation();
                     onStartPayment(bill);
                   }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.stopPropagation();
-                      onStartPayment(bill);
-                    }
-                  }}
-                  className="inline-flex justify-center rounded-2xl bg-[#211d19] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27] md:justify-self-end"
+                  className="w-full rounded-2xl bg-[#211d19] px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27] sm:w-auto"
                 >
                   Paga
-                </span>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         </Card>
