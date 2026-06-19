@@ -2708,6 +2708,7 @@ function BillsView({
 }) {
   const [status, setStatus] = useState<BillStatus | "todas">("todas");
   const [category, setCategory] = useState("todas");
+  const [search, setSearch] = useState("");
   const [selectedBillIds, setSelectedBillIds] = useState<number[]>([]);
   const billCategories = [
     "todas",
@@ -2716,7 +2717,9 @@ function BillsView({
   const filteredBills = bills.filter((bill) => {
     const matchesStatus = status === "todas" || bill.status === status;
     const matchesCategory = category === "todas" || normalizeCategoryName(bill.category) === normalizeCategoryName(category);
-    return matchesStatus && matchesCategory;
+    const term = normalizeCategoryName(search);
+    const matchesSearch = !term || [bill.name, bill.category, bill.notes].some((value) => normalizeCategoryName(value ?? "").includes(term));
+    return matchesStatus && matchesCategory && matchesSearch;
   });
   const alertBills = filteredBills.filter((bill) => bill.status === "atrasada").sort(sortByPaymentPriority);
   const pendingBills = filteredBills.filter((bill) => bill.status === "pendente").sort(sortByPaymentPriority);
@@ -2742,37 +2745,6 @@ function BillsView({
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Filtros</p>
-          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Organize por status e categoria.</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value as BillStatus | "todas")}
-            className="min-w-[150px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
-          >
-            {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="min-w-[220px] rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.06)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
-          >
-            {billCategories.map((item) => (
-              <option key={item} value={item}>
-                {item === "todas" ? "Todas categorias" : item}
-              </option>
-            ))}
-          </select>
-        </div>
-      </Card>
-
       <div className="grid gap-3 md:grid-cols-3">
         {summaryItems.map(({ icon: Icon, ...item }) => (
           <div
@@ -2797,9 +2769,9 @@ function BillsView({
       </div>
 
       <Card className="p-3 lg:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid gap-3 xl:grid-cols-[1fr_auto] xl:items-center xl:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Ferramentas</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Selecionadas</p>
             <p className="mt-1 text-sm font-black">
               {formatCurrency(selectedTotal)}
               <span className="ml-2 text-xs font-bold text-[var(--muted)]">
@@ -2807,7 +2779,38 @@ function BillsView({
               </span>
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_160px_220px] xl:min-w-[680px]">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar conta, categoria ou observação"
+              className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.04)] outline-none transition placeholder:text-[#756b62]/60 focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
+            />
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as BillStatus | "todas")}
+              className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.04)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
+            >
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-sm font-extrabold text-[#211d19] shadow-[0_12px_30px_rgba(33,29,25,.04)] outline-none transition focus:border-[#d75c27]/50 dark:border-white/18 dark:bg-white/7 dark:text-white"
+            >
+              {billCategories.map((item) => (
+                <option key={item} value={item}>
+                  {item === "todas" ? "Todas categorias" : item}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-2 xl:col-span-2 xl:justify-end">
             <button
               type="button"
               onClick={() =>
@@ -3177,6 +3180,7 @@ function ReportsView({
   onOpenFinanceDetail: (detail: FinanceDetail) => void;
   onOpenDataSettings: () => void;
 }) {
+  const [showAllDistribution, setShowAllDistribution] = useState(false);
   const score = calculateNorthScore(metrics, data.goals);
   const previousMetrics = buildMetrics(buildMonthDataFromLists(addMonths(data.selectedMonth, -1), allIncomes, allBills, allGoals, []));
   const previousScore = calculateNorthScore(previousMetrics, allGoals);
@@ -3209,7 +3213,8 @@ function ReportsView({
     }, {}),
   )
     .sort((a, b) => b.value - a.value);
-  const distributionItems = categoryTotals.slice(0, 5);
+  const distributionItems = categoryTotals;
+  const visibleDistributionItems = showAllDistribution ? distributionItems : distributionItems.slice(0, 5);
   const distributionRealTotal = sum(distributionItems, (item) => item.value);
   const distributionTotal = Math.max(distributionRealTotal, 1);
   let angle = 0;
@@ -3440,7 +3445,7 @@ function ReportsView({
               </div>
             </div>
             <div className="space-y-3">
-              {distributionItems.length ? distributionItems.map((item) => {
+              {visibleDistributionItems.length ? visibleDistributionItems.map((item) => {
                 const percent = Math.round((item.value / distributionTotal) * 100);
                 return (
                   <button
@@ -3469,9 +3474,10 @@ function ReportsView({
               )}
             </div>
           </div>
-          {distributionItems.length ? (
-            <button type="button" onClick={() => onOpenFinanceDetail(buildFinanceDetail("Saiu no mês", data, metrics, realBalance))} className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--line)] px-4 py-3 text-xs font-extrabold">
-              Ver contas pagas <ChevronRight className="h-4 w-4" />
+          {distributionItems.length > 5 ? (
+            <button type="button" onClick={() => setShowAllDistribution((current) => !current)} className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--line)] px-4 py-3 text-xs font-extrabold">
+              {showAllDistribution ? "Ver menos" : `Ver mais ${distributionItems.length - 5} categoria(s)`}
+              <ChevronRight className={`h-4 w-4 transition ${showAllDistribution ? "-rotate-90" : "rotate-90"}`} />
             </button>
           ) : null}
         </Card>
