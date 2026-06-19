@@ -3196,17 +3196,18 @@ function ReportsView({
   const completedObjectives = data.objectives.filter((objective) => objective.done).length;
   const totalObjectives = Math.max(data.objectives.length, 1);
   const moneyDestinationTotal = Math.max(sum(data.bills, (bill) => bill.paidAmount ?? bill.expectedAmount) + totalSaved, 1);
-  const categoryTotals = categories
-    .filter((category) => category.type === "conta")
-    .map((category) => ({
-      label: category.name,
-      value: sum(
-        metrics.paidBills.filter((bill) => normalizeCategoryName(bill.category) === normalizeCategoryName(category.name)),
-        (bill) => bill.paidAmount ?? bill.expectedAmount,
-      ),
-      color: category.color,
-    }))
-    .filter((item) => item.value > 0)
+  const categoryTotals = Object.values(
+    metrics.paidBills.reduce<Record<string, { label: string; value: number; color: string; count: number }>>((acc, bill) => {
+      const category = findCategory(categories, bill.category, "conta");
+      const label = category?.name ?? bill.category;
+      const key = normalizeCategoryName(label);
+      acc[key] = acc[key] ?? { label, value: 0, color: category?.color ?? "#d75c27", count: 0 };
+      acc[key].value += bill.paidAmount ?? bill.expectedAmount;
+      acc[key].count += 1;
+      acc[key].color = category?.color ?? acc[key].color;
+      return acc;
+    }, {}),
+  )
     .sort((a, b) => b.value - a.value);
   const distributionItems = categoryTotals.slice(0, 5);
   const distributionRealTotal = sum(distributionItems, (item) => item.value);
@@ -3446,10 +3447,19 @@ function ReportsView({
                     type="button"
                     key={item.label}
                     onClick={() => onOpenFinanceDetail(buildFinanceDetail(item.label, data, metrics, realBalance))}
-                    className="flex w-full items-center justify-between gap-3 border-b border-[#211d19]/8 pb-2 text-left last:border-b-0 dark:border-white/10"
+                    className="group flex w-full items-center justify-between gap-3 rounded-2xl border-b border-[#211d19]/8 px-2 py-2 text-left transition hover:bg-[#211d19]/4 last:border-b-0 dark:border-white/10 dark:hover:bg-white/7"
                   >
-                    <span className="flex items-center gap-3"><span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} /><span><span className="block text-sm font-extrabold">{item.label}</span><span className="text-xs font-semibold text-[var(--muted)]">{formatCurrency(item.value)}</span></span></span>
-                    <span className="text-sm font-black">{percent}%</span>
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-extrabold">{item.label}</span>
+                        <span className="text-xs font-semibold text-[var(--muted)]">{formatCurrency(item.value)} • {item.count} conta(s)</span>
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2 text-sm font-black">
+                      {percent}%
+                      <ChevronRight className="h-3.5 w-3.5 text-[var(--muted)] opacity-0 transition group-hover:opacity-100" />
+                    </span>
                   </button>
                 );
               }) : (
