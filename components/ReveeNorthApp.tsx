@@ -754,7 +754,6 @@ function buildMetrics(data: MonthData) {
   const paidOnTimeBills = paidBills.filter((bill) => !isPaidLate(bill));
   const paidLateBills = paidBills.filter(isPaidLate);
   const totalBills = data.bills.length;
-  const totalExpected = sum(data.bills, (bill) => bill.expectedAmount);
   const totalIncome = sum(data.incomes, (income) => income.amount);
   const totalPaid = sum(
     paidBills,
@@ -763,6 +762,7 @@ function buildMetrics(data: MonthData) {
   const totalPending = sum(pendingBills, (bill) => bill.expectedAmount);
   const totalOverdue = sum(overdueBills, (bill) => bill.expectedAmount);
   const totalMissing = totalPending + totalOverdue;
+  const totalExpected = totalPaid + totalMissing;
   const projectedBalance = totalIncome - totalPaid - totalPending - totalOverdue;
   const reserveGoal = data.goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
   const reserveDestination = reserveGoal?.current ?? 0;
@@ -2734,6 +2734,9 @@ function BillsView({
   const regularBills = [...pendingBills, ...completedBills];
   const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
+  const totalPaid = sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount);
+  const totalMissing = sum(pendingOrOverdueBills, (bill) => bill.expectedAmount);
+  const totalOverall = totalPaid + totalMissing;
   const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill.id));
   const selectedTotal = sum(selectedBills, (bill) => bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount);
   const allFilteredSelected = filteredBills.length > 0 && filteredBills.every((bill) => selectedBillIds.includes(bill.id));
@@ -2743,9 +2746,9 @@ function BillsView({
     );
   };
   const summaryItems = [
-    { label: "Total previsto", value: formatCurrency(sum(bills, (bill) => bill.expectedAmount)), helper: `${bills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
-    { label: "Já pago", value: formatCurrency(sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount)), helper: `${paidBills.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
-    { label: "Falta pagar", value: formatCurrency(sum(pendingOrOverdueBills, (bill) => bill.expectedAmount)), helper: `${pendingOrOverdueBills.length} conta(s) abertas`, icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
+    { label: "Total geral", value: formatCurrency(totalOverall), helper: `${bills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
+    { label: "Já pago", value: formatCurrency(totalPaid), helper: `${paidBills.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
+    { label: "Falta pagar", value: formatCurrency(totalMissing), helper: `${pendingOrOverdueBills.length} conta(s) abertas`, icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
   ];
 
   return (
