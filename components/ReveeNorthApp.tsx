@@ -122,6 +122,7 @@ const navItems = [
 ];
 
 const DEFAULT_ACCOUNT_CREATED_AT = "2026-06-11";
+const STUCK_FOOTBALL_BILLS_CLEANUP_KEY = "reveenorth:cleanup-football-bills-2026-07-25";
 
 const statusLabels: Record<BillStatus | "todas", string> = {
   todas: "Todas",
@@ -284,6 +285,7 @@ type CalculatorRules = {
 
 type ReveeNorthCloudState = {
   version: 1;
+  updatedAt?: string;
   onboardingComplete: boolean;
   selectedMonth: string;
   accountCreatedAt: string;
@@ -533,6 +535,12 @@ function addMonths(month: string, offset: number) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function monthDistance(fromMonth: string, toMonth: string) {
+  const [fromYear, fromMonthNumber] = fromMonth.split("-").map(Number);
+  const [toYear, toMonthNumber] = toMonth.split("-").map(Number);
+  return (toYear - fromYear) * 12 + (toMonthNumber - fromMonthNumber);
+}
+
 function getAccountCreatedAt() {
   if (typeof window === "undefined") return DEFAULT_ACCOUNT_CREATED_AT;
   const saved = localStorage.getItem("reveenorth:account-created-at");
@@ -596,6 +604,68 @@ function fixedRepeatEndMonth(bill: Bill) {
   return addMonths(monthKey(bill.dueDate), repeatMonths - 1);
 }
 
+function billRecurrenceKey(bill: Bill) {
+  return bill.recurrenceId ?? (bill.fixed ? String(bill.id) : undefined);
+}
+
+function stopBillRecurrenceFromMonth(
+  sourceBills: Bill[],
+  recurrenceId: string,
+  cutoffMonth: string,
+  keepBillId?: number,
+) {
+  const previousMonth = addMonths(cutoffMonth, -1);
+  return sourceBills
+    .map((bill): Bill | null => {
+      const key = billRecurrenceKey(bill);
+      if (key !== recurrenceId) return bill;
+
+      const billMonth = monthKey(bill.dueDate);
+      if (bill.id === keepBillId) {
+        return {
+          ...bill,
+          fixed: false,
+          repeatMonths: undefined,
+          recurrenceId: undefined,
+          generatedFromId: undefined,
+        };
+      }
+
+      if (billMonth >= cutoffMonth && bill.status !== "paga") return null;
+
+      if (bill.generatedFromId === undefined && bill.fixed && billMonth < cutoffMonth) {
+        return {
+          ...bill,
+          recurrenceId,
+          repeatMonths: Math.max(1, monthDistance(billMonth, previousMonth) + 1),
+        };
+      }
+
+      return bill;
+    })
+    .filter((bill): bill is Bill => Boolean(bill));
+}
+
+function removeBillsAndFutureRepeats(sourceBills: Bill[], ids: number[], accountCreatedAt: string) {
+  const selected = sourceBills.filter((bill) => ids.includes(bill.id));
+  const recurrenceStops = selected.reduce<Map<string, string>>((acc, bill) => {
+    const key = billRecurrenceKey(bill);
+    if (!key) return acc;
+    const cutoffMonth = monthKey(bill.dueDate);
+    const currentCutoff = acc.get(key);
+    acc.set(key, currentCutoff && currentCutoff < cutoffMonth ? currentCutoff : cutoffMonth);
+    return acc;
+  }, new Map());
+
+  const directIds = new Set(ids);
+  let nextBills = sourceBills.filter((bill) => !directIds.has(bill.id));
+  recurrenceStops.forEach((cutoffMonth, recurrenceId) => {
+    nextBills = stopBillRecurrenceFromMonth(nextBills, recurrenceId, cutoffMonth);
+  });
+
+  return ensureFixedBillInstances(nextBills, accountCreatedAt);
+}
+
 function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string) {
   const horizon = addMonths(monthKey(getTodayKey()), 3);
   const nextBills = [...sourceBills];
@@ -603,11 +673,11 @@ function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string)
     nextBills.map((bill) => `${bill.recurrenceId ?? bill.id}:${monthKey(bill.dueDate)}`),
   );
   const fixedRoots = nextBills
-    .filter((bill) => bill.fixed)
+    .filter((bill) => bill.fixed && bill.generatedFromId === undefined)
     .reduce<Record<string, Bill>>((acc, bill) => {
       const key = bill.recurrenceId ?? String(bill.id);
       const currentRoot = acc[key];
-      if (!currentRoot || bill.generatedFromId === undefined || bill.dueDate < currentRoot.dueDate) {
+      if (!currentRoot || bill.dueDate < currentRoot.dueDate) {
         acc[key] = { ...bill, recurrenceId: key };
       }
       return acc;
@@ -691,12 +761,40 @@ function sanitizeLoadedState(state: Partial<ReveeNorthCloudState>, accountCreate
   };
 }
 
+function shouldApplyIncomingCloudState(incoming: Partial<ReveeNorthCloudState>) {
+  if (typeof window === "undefined") return true;
+  const savedState = localStorage.getItem("reveenorth:app-state");
+  if (!savedState) return true;
+  try {
+    const localState = JSON.parse(savedState) as Partial<ReveeNorthCloudState>;
+    if (localState.updatedAt && incoming.updatedAt) {
+      return incoming.updatedAt >= localState.updatedAt;
+    }
+    if (localState.updatedAt && !incoming.updatedAt) {
+      return false;
+    }
+  } catch {
+    return true;
+  }
+  return true;
+}
+
 function preserveBillLogos(incomingBills: Bill[], currentBills: Bill[]) {
   const currentById = new Map(currentBills.map((bill) => [bill.id, bill]));
   return incomingBills.map((bill) => {
     const currentLogo = currentById.get(bill.id)?.logoUrl;
     return !bill.logoUrl && currentLogo ? { ...bill, logoUrl: currentLogo } : bill;
   });
+}
+
+function cleanupStuckFootballBillsOnce(incomingBills: Bill[]) {
+  if (typeof window === "undefined") return incomingBills;
+  if (localStorage.getItem(STUCK_FOOTBALL_BILLS_CLEANUP_KEY) === "done") return incomingBills;
+  const cleanedBills = incomingBills.filter((bill) => !normalizeCategoryName(bill.name).includes("futebol"));
+  if (cleanedBills.length !== incomingBills.length) {
+    localStorage.setItem(STUCK_FOOTBALL_BILLS_CLEANUP_KEY, "done");
+  }
+  return cleanedBills;
 }
 
 function buildVisibleBills(allBills: Bill[], selectedMonth: string) {
@@ -7822,6 +7920,16 @@ export default function ReveeNorthApp() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountCreatedAt, setAccountCreatedAt] = useState(() => getAccountCreatedAt());
   const [selectedMonth, setSelectedMonth] = useState(() => monthKey(getTodayKey()));
+  const [lastSavedAt, setLastSavedAt] = useState(() => {
+    if (typeof window === "undefined") return new Date().toISOString();
+    try {
+      const savedState = localStorage.getItem("reveenorth:app-state");
+      if (!savedState) return new Date().toISOString();
+      return (JSON.parse(savedState) as Partial<ReveeNorthCloudState>).updatedAt ?? new Date().toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
+  });
   const [bills, setBills] = useState<Bill[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -7909,6 +8017,7 @@ export default function ReveeNorthApp() {
 
   const applyCloudState = (state: Partial<ReveeNorthCloudState>) => {
     const safeState = sanitizeLoadedState(state, accountCreatedAt);
+    if (safeState.updatedAt) setLastSavedAt(safeState.updatedAt);
     if (safeState.accountCreatedAt) {
       setAccountCreatedAt(safeState.accountCreatedAt);
       localStorage.setItem("reveenorth:account-created-at", safeState.accountCreatedAt);
@@ -7916,7 +8025,7 @@ export default function ReveeNorthApp() {
     if (safeState.user) setUser(safeState.user);
     if (safeState.realBalance) setRealBalance(safeState.realBalance);
     if (safeState.bills) {
-      setBills((current) => preserveBillLogos(safeState.bills!, current));
+      setBills((current) => preserveBillLogos(cleanupStuckFootballBillsOnce(safeState.bills!), current));
     }
     if (safeState.incomes) setIncomes(safeState.incomes);
     if (safeState.goals) setGoals(safeState.goals);
@@ -7970,7 +8079,7 @@ export default function ReveeNorthApp() {
 
         try {
           const cloudState = await loadCloudState<ReveeNorthCloudState>(session);
-          if (cloudState && mounted) applyCloudState(cloudState);
+          if (cloudState && mounted && shouldApplyIncomingCloudState(cloudState)) applyCloudState(cloudState);
         } catch {
           // If the Supabase table has not been created yet, keep the local data.
         }
@@ -8023,6 +8132,7 @@ export default function ReveeNorthApp() {
 
   const cloudState = useMemo<ReveeNorthCloudState>(() => ({
     version: 1,
+    updatedAt: lastSavedAt,
     onboardingComplete,
     selectedMonth,
     accountCreatedAt,
@@ -8046,6 +8156,7 @@ export default function ReveeNorthApp() {
     darkMode,
     goals,
     incomes,
+    lastSavedAt,
     notifications,
     objectives,
     onboardingComplete,
@@ -8068,7 +8179,9 @@ export default function ReveeNorthApp() {
   }, [authSession, cloudReady, cloudState]);
 
   const persistCloudPatchNow = (patch: Partial<ReveeNorthCloudState>) => {
-    const nextState = { ...cloudState, ...patch };
+    const updatedAt = new Date().toISOString();
+    setLastSavedAt(updatedAt);
+    const nextState = { ...cloudState, ...patch, updatedAt };
     localStorage.setItem("reveenorth:app-state", JSON.stringify(nextState));
     if (authSession && cloudReady) {
       saveCloudState(authSession, nextState).catch(() => undefined);
@@ -8180,6 +8293,30 @@ export default function ReveeNorthApp() {
   const handleSaveBill = (updatedBill: Bill) => {
     setBills((current) => {
       const recurrenceId = updatedBill.recurrenceId ?? String(updatedBill.id);
+      const shouldStopRecurrence =
+        !updatedBill.fixed &&
+        current.some((bill) => billRecurrenceKey(bill) === recurrenceId);
+
+      if (shouldStopRecurrence) {
+        const withUpdatedBill = current.map((bill) =>
+          bill.id === updatedBill.id
+            ? normalizeBillStatus({
+                ...updatedBill,
+                fixed: false,
+                repeatMonths: undefined,
+                recurrenceId: undefined,
+                generatedFromId: undefined,
+              })
+            : bill,
+        );
+        const nextBills = ensureFixedBillInstances(
+          stopBillRecurrenceFromMonth(withUpdatedBill, recurrenceId, monthKey(updatedBill.dueDate), updatedBill.id),
+          accountCreatedAt,
+        );
+        persistCloudPatchNow({ bills: nextBills });
+        return nextBills;
+      }
+
       const repeatEndMonth = fixedRepeatEndMonth(updatedBill);
       const nextBills = ensureFixedBillInstances(
         current
@@ -8215,7 +8352,7 @@ export default function ReveeNorthApp() {
 
   const handleDeleteBill = (id: number) => {
     setBills((current) => {
-      const nextBills = current.filter((bill) => bill.id !== id);
+      const nextBills = removeBillsAndFutureRepeats(current, [id], accountCreatedAt);
       persistCloudPatchNow({ bills: nextBills });
       return nextBills;
     });
@@ -8224,7 +8361,7 @@ export default function ReveeNorthApp() {
   const handleDeleteBills = (ids: number[]) => {
     if (!ids.length) return;
     setBills((current) => {
-      const nextBills = current.filter((bill) => !ids.includes(bill.id));
+      const nextBills = removeBillsAndFutureRepeats(current, ids, accountCreatedAt);
       persistCloudPatchNow({ bills: nextBills });
       return nextBills;
     });
