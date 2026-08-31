@@ -703,92 +703,15 @@ const initialBusinessCategories: Category[] = [
   { id: 5005, name: "Operacional", icon: "Folder", color: "#14b8a6", type: "conta", active: true },
 ];
 
-const exampleBusinessSales: BusinessSale[] = [
-  {
-    id: 7001,
-    clientName: "Studio Aurora",
-    service: "Mentoria estratégica",
-    closedAmount: 3200,
-    receivedAmount: 3092,
-    receivedDate: "2026-09-02",
-    closedDate: "2026-08-20",
-    paymentMethod: "Cartão de crédito",
-    cardFee: 108,
-    installments: [],
-    notes: "Exemplo de venda no cartão com taxa.",
-  },
-  {
-    id: 7002,
-    clientName: "Clínica Bela Forma",
-    service: "Implementação de CRM",
-    closedAmount: 4800,
-    receivedAmount: 4800,
-    receivedDate: "2026-09-04",
-    closedDate: "2026-09-04",
-    paymentMethod: "Pix",
-    cardFee: 0,
-    installments: [],
-    notes: "Exemplo de venda recebida à vista.",
-  },
-  {
-    id: 7003,
-    clientName: "North Beauty",
-    service: "Projeto de operação comercial",
-    closedAmount: 6000,
-    receivedAmount: 0,
-    closedDate: "2026-09-12",
-    paymentMethod: "Boleto",
-    cardFee: 0,
-    installments: [
-      { id: 7101, dueDate: "2026-09-10", amount: 1500, received: true, receivedDate: "2026-09-10" },
-      { id: 7102, dueDate: "2026-10-10", amount: 1500, received: false },
-      { id: 7103, dueDate: "2026-11-10", amount: 1500, received: false },
-      { id: 7104, dueDate: "2026-12-10", amount: 1500, received: false },
-    ],
-    notes: "Exemplo de boleto parcelado em 4x.",
-  },
-  {
-    id: 7004,
-    clientName: "Revee Academy",
-    service: "Treinamento de equipe",
-    closedAmount: 2500,
-    receivedAmount: 2415,
-    receivedDate: "2026-10-02",
-    closedDate: "2026-09-18",
-    paymentMethod: "Cartão de crédito",
-    cardFee: 85,
-    installments: [],
-    notes: "Exemplo de taxa de cartão no mês.",
-  },
-];
-
-const exampleBusinessExpenses: Bill[] = [
-  { id: 7201, name: "Simples Nacional", category: "Impostos", dueDate: "2026-08-20", expectedAmount: 380, status: "paga", paidDate: "2026-08-19", paidAmount: 380, notes: "Exemplo de imposto pago." },
-  { id: 7202, name: "Notion e automações", category: "Softwares", dueDate: "2026-09-05", expectedAmount: 149, status: "paga", paidDate: "2026-09-05", paidAmount: 149, notes: "Exemplo de software." },
-  { id: 7203, name: "Google Workspace", category: "Softwares", dueDate: "2026-09-10", expectedAmount: 86, status: "paga", paidDate: "2026-09-10", paidAmount: 86, notes: "Exemplo de assinatura." },
-  { id: 7204, name: "Gestor de tráfego", category: "Marketing", dueDate: "2026-09-15", expectedAmount: 900, status: "paga", paidDate: "2026-09-15", paidAmount: 900, notes: "Exemplo de marketing." },
-  { id: 7205, name: "DARF mensal", category: "Impostos", dueDate: "2026-09-20", expectedAmount: 620, status: "pendente", notes: "Exemplo de imposto em aberto." },
-];
-
-const exampleBusinessPayroll: BusinessPayroll[] = [
-  { id: 7301, personName: "Daniela Escatalini", type: "Pró-labore", amount: 2500, paidDate: "2026-09-06", notes: "Exemplo de pró-labore." },
-  { id: 7302, personName: "Assistente comercial", type: "Bônus", amount: 350, paidDate: "2026-09-22", notes: "Exemplo de bônus." },
-];
-
-const exampleBusinessInvestments: BusinessInvestment[] = [
-  { id: 7401, name: "Reserva da empresa", type: "Reserva", amount: 1200, date: "2026-09-08", notes: "Dinheiro guardado para segurança da operação." },
-  { id: 7402, name: "CDB liquidez diária", type: "Investimento", amount: 800, date: "2026-09-25", notes: "Exemplo de investimento da empresa." },
-];
-
 const defaultBusinessState = (): BusinessState => ({
-  sales: exampleBusinessSales,
-  expenses: exampleBusinessExpenses,
-  payroll: exampleBusinessPayroll,
-  investments: exampleBusinessInvestments,
+  sales: [],
+  expenses: [],
+  payroll: [],
+  investments: [],
   categories: initialBusinessCategories,
   settings: {
     annualRevenueGoal: 100000,
-    monthlyRevenueGoal: 12000,
+    monthlyRevenueGoal: 0,
     monthlyProLaboreGoal: 4500,
   },
 });
@@ -812,34 +735,6 @@ function sanitizeBusinessState(state?: Partial<BusinessState>): BusinessState {
       ...defaults.settings,
       ...(state?.settings ?? {}),
     },
-  };
-}
-
-function mergeBusinessExamples(state: BusinessState): BusinessState {
-  return {
-    ...state,
-    sales: [
-      ...state.sales,
-      ...exampleBusinessSales.filter((sale) => !state.sales.some((current) => current.id === sale.id)),
-    ],
-    expenses: [
-      ...state.expenses,
-      ...exampleBusinessExpenses.filter((expense) => !state.expenses.some((current) => current.id === expense.id)),
-    ],
-    payroll: [
-      ...state.payroll,
-      ...exampleBusinessPayroll.filter((payroll) => !state.payroll.some((current) => current.id === payroll.id)),
-    ],
-    investments: [
-      ...(state.investments ?? []),
-      ...exampleBusinessInvestments.filter((investment) => !(state.investments ?? []).some((current) => current.id === investment.id)),
-    ],
-    categories: [
-      ...state.categories,
-      ...initialBusinessCategories.filter(
-        (category) => !state.categories.some((current) => normalizeCategoryName(current.name) === normalizeCategoryName(category.name)),
-      ),
-    ],
   };
 }
 
@@ -8049,6 +7944,7 @@ function SettingsView({
   onOpenProfile,
   onOpenCategoryModal,
   onConfirmDanger,
+  onResetFinancialData,
   darkMode,
   setDarkMode,
   allIncomes,
@@ -8077,6 +7973,7 @@ function SettingsView({
   onOpenProfile: () => void;
   onOpenCategoryModal: () => void;
   onConfirmDanger: (title: string, message: string, onConfirm?: () => void) => void;
+  onResetFinancialData: () => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   allIncomes: Income[];
@@ -8255,6 +8152,7 @@ function SettingsView({
             categories={categories}
             realBalance={realBalance}
             user={user}
+            onResetFinancialData={onResetFinancialData}
           />
         ) : null}
       </div>
@@ -8731,6 +8629,7 @@ function DataPanel({
   categories,
   realBalance,
   user,
+  onResetFinancialData,
 }: {
   incomes: Income[];
   bills: Bill[];
@@ -8738,6 +8637,7 @@ function DataPanel({
   categories: Category[];
   realBalance: RealBalance;
   user: UserProfile;
+  onResetFinancialData: () => void;
 }) {
   const options = buildMonthOptions(getAccountCreatedAt());
   const [modalOpen, setModalOpen] = useState(false);
@@ -8915,68 +8815,89 @@ function DataPanel({
   };
 
   return (
-    <Card className="max-w-2xl">
-      <FileText className="h-6 w-6 text-[#d75c27]" />
-      <h3 className="mt-4 text-xl font-extrabold">Relatório em PDF</h3>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-        Gere um relatório financeiro do mês atual com suas principais métricas, metas, North Score e Recomendações North.
-      </p>
-      <button
-        type="button"
-        onClick={() => {
-          setEmptyMessage(false);
-          setModalOpen(true);
-        }}
-        className="mt-6 rounded-2xl bg-[#d75c27] px-5 py-3 text-xs font-extrabold text-white"
-      >
-        Exportar relatório em PDF
-      </button>
-      {modalOpen ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#211d19]/45 p-4 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-[30px] border border-white/50 bg-[#f7f7f6]/96 p-6 shadow-2xl">
-            <h3 className="text-xl font-black">Selecionar período</h3>
-            <p className="mt-2 text-sm text-[#756b62]">Escolha o intervalo que entrará no relatório.</p>
-            {emptyMessage ? (
-              <p className="mt-4 rounded-2xl border border-[#d75c27]/20 bg-[#d75c27]/10 p-3 text-xs font-bold text-[#b84d1f]">
-                Não encontramos dados suficientes para gerar este relatório.
-              </p>
-            ) : null}
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs font-bold text-[#756b62]">De</span>
-                <select
-                  value={fromMonth}
-                  onChange={(event) => {
-                    setFromMonth(event.target.value);
-                    setEmptyMessage(false);
-                  }}
-                  className="mt-2 w-full rounded-2xl border border-[#211d19]/10 bg-white px-4 py-3 text-sm font-bold"
-                >
-                  {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold text-[#756b62]">Até</span>
-                <select
-                  value={toMonth}
-                  onChange={(event) => {
-                    setToMonth(event.target.value);
-                    setEmptyMessage(false);
-                  }}
-                  className="mt-2 w-full rounded-2xl border border-[#211d19]/10 bg-white px-4 py-3 text-sm font-bold"
-                >
-                  {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setModalOpen(false)} className="rounded-2xl border border-[#211d19]/10 px-4 py-2.5 text-xs font-extrabold">Cancelar</button>
-              <button type="button" onClick={exportPdf} className="rounded-2xl bg-[#d75c27] px-4 py-2.5 text-xs font-extrabold text-white">Gerar PDF</button>
+    <div className="space-y-4">
+      <Card className="max-w-2xl">
+        <FileText className="h-6 w-6 text-[#d75c27]" />
+        <h3 className="mt-4 text-xl font-extrabold">Relatório em PDF</h3>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+          Gere um relatório financeiro do mês atual com suas principais métricas, metas, North Score e Recomendações North.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setEmptyMessage(false);
+            setModalOpen(true);
+          }}
+          className="mt-6 rounded-2xl bg-[#d75c27] px-5 py-3 text-xs font-extrabold text-white"
+        >
+          Exportar relatório em PDF
+        </button>
+        {modalOpen ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#211d19]/45 p-4 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-[30px] border border-white/50 bg-[#f7f7f6]/96 p-6 shadow-2xl">
+              <h3 className="text-xl font-black">Selecionar período</h3>
+              <p className="mt-2 text-sm text-[#756b62]">Escolha o intervalo que entrará no relatório.</p>
+              {emptyMessage ? (
+                <p className="mt-4 rounded-2xl border border-[#d75c27]/20 bg-[#d75c27]/10 p-3 text-xs font-bold text-[#b84d1f]">
+                  Não encontramos dados suficientes para gerar este relatório.
+                </p>
+              ) : null}
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-bold text-[#756b62]">De</span>
+                  <select
+                    value={fromMonth}
+                    onChange={(event) => {
+                      setFromMonth(event.target.value);
+                      setEmptyMessage(false);
+                    }}
+                    className="mt-2 w-full rounded-2xl border border-[#211d19]/10 bg-white px-4 py-3 text-sm font-bold"
+                  >
+                    {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold text-[#756b62]">Até</span>
+                  <select
+                    value={toMonth}
+                    onChange={(event) => {
+                      setToMonth(event.target.value);
+                      setEmptyMessage(false);
+                    }}
+                    className="mt-2 w-full rounded-2xl border border-[#211d19]/10 bg-white px-4 py-3 text-sm font-bold"
+                  >
+                    {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <button type="button" onClick={() => setModalOpen(false)} className="rounded-2xl border border-[#211d19]/10 px-4 py-2.5 text-xs font-extrabold">Cancelar</button>
+                <button type="button" onClick={exportPdf} className="rounded-2xl bg-[#d75c27] px-4 py-2.5 text-xs font-extrabold text-white">Gerar PDF</button>
+              </div>
             </div>
           </div>
+        ) : null}
+      </Card>
+      <Card className="border-red-500/20 bg-red-500/[0.03] p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-red-600">Limpeza da base</p>
+            <h3 className="mt-2 text-lg font-extrabold">Zerar lançamentos financeiros</h3>
+            <p className="mt-2 max-w-2xl text-xs font-semibold leading-5 text-[var(--muted)]">
+              Remove entradas, contas, dívidas, metas, objetivos, vendas, saídas, pró-labore, bônus e investimentos salvos.
+              Perfil, categorias e preferências continuam no sistema.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onResetFinancialData}
+            className="inline-flex h-12 shrink-0 items-center justify-center rounded-2xl bg-red-600 px-5 text-sm font-extrabold text-white shadow-lg shadow-red-600/15 transition hover:bg-red-700"
+          >
+            Zerar tudo
+          </button>
         </div>
-      ) : null}
-    </Card>
+      </Card>
+    </div>
   );
 }
 
@@ -9558,6 +9479,7 @@ function ActiveView({
   onOpenProfile,
   onOpenCategoryModal,
   onConfirmDanger,
+  onResetFinancialData,
   darkMode,
   setDarkMode,
   realBalance,
@@ -9620,6 +9542,7 @@ function ActiveView({
   onOpenProfile: () => void;
   onOpenCategoryModal: () => void;
   onConfirmDanger: (title: string, message: string, onConfirm?: () => void) => void;
+  onResetFinancialData: () => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   realBalance: RealBalance;
@@ -9790,6 +9713,7 @@ function ActiveView({
         onOpenProfile={onOpenProfile}
         onOpenCategoryModal={onOpenCategoryModal}
         onConfirmDanger={onConfirmDanger}
+        onResetFinancialData={onResetFinancialData}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         allIncomes={allIncomes}
@@ -10108,14 +10032,6 @@ export default function ReveeNorthApp() {
     }
     localStorage.setItem("reveenorth:categories", JSON.stringify(categories));
   }, [categories]);
-
-  useEffect(() => {
-    if (!cloudReady || typeof window === "undefined") return;
-    const seedKey = "reveenorth:business-examples-seeded-2026-08-30-v2";
-    if (localStorage.getItem(seedKey) === "true") return;
-    setBusiness((current) => mergeBusinessExamples(current));
-    localStorage.setItem(seedKey, "true");
-  }, [cloudReady]);
 
   useEffect(() => {
     localStorage.setItem("reveenorth:account-created-at", accountCreatedAt);
@@ -10768,6 +10684,36 @@ export default function ReveeNorthApp() {
     setConfirmModal({ title, message, onConfirm: onConfirm ?? (() => undefined) });
   };
 
+  const handleResetFinancialData = () => {
+    confirmDanger(
+      "Zerar lançamentos financeiros?",
+      "Isso apaga entradas, contas, dívidas, metas, objetivos, vendas, saídas, pró-labore, bônus e investimentos salvos. Seu perfil, login, categorias e preferências continuam.",
+      () => {
+        const cleanBusiness = defaultBusinessState();
+        const cleanRealBalance = { amount: 0, date: getTodayKey(), note: "" };
+        setBills([]);
+        setDebts([]);
+        setIncomes([]);
+        setGoals([]);
+        setObjectives([]);
+        setPlanning(undefined);
+        setBusiness(cleanBusiness);
+        setRealBalance(cleanRealBalance);
+        persistCloudPatchNow({
+          bills: [],
+          debts: [],
+          incomes: [],
+          goals: [],
+          objectives: [],
+          planning: undefined,
+          business: cleanBusiness,
+          realBalance: cleanRealBalance,
+        });
+        showFeedback("Base zerada.", "Os lançamentos financeiros foram limpos e salvos.");
+      },
+    );
+  };
+
   const handleCompleteOnboarding = (answers: OnboardingData) => {
     localStorage.setItem("reveenorth:onboarding", JSON.stringify(answers));
     localStorage.setItem("reveenorth:onboarding-complete", "true");
@@ -11113,6 +11059,7 @@ export default function ReveeNorthApp() {
             onOpenProfile={() => setProfileModalOpen(true)}
             onOpenCategoryModal={() => setCategoryModalOpen(true)}
             onConfirmDanger={confirmDanger}
+            onResetFinancialData={handleResetFinancialData}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
             realBalance={realBalance}
