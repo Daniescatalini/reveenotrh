@@ -110,6 +110,7 @@ import {
   signUpWithPassword,
 } from "@/lib/supabase-lite";
 import type { SupabaseSession } from "@/lib/supabase-lite";
+import historicalBusinessSales from "@/data/historical-business-sales.json";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
@@ -715,6 +716,8 @@ const defaultBusinessState = (): BusinessState => ({
     monthlyProLaboreGoal: 4500,
   },
 });
+
+const historicalBusinessSalesImport = historicalBusinessSales as BusinessSale[];
 
 function sanitizeBusinessState(state?: Partial<BusinessState>): BusinessState {
   const defaults = defaultBusinessState();
@@ -7945,6 +7948,7 @@ function SettingsView({
   onOpenCategoryModal,
   onConfirmDanger,
   onResetFinancialData,
+  onImportHistoricalBusinessSales,
   darkMode,
   setDarkMode,
   allIncomes,
@@ -7974,6 +7978,7 @@ function SettingsView({
   onOpenCategoryModal: () => void;
   onConfirmDanger: (title: string, message: string, onConfirm?: () => void) => void;
   onResetFinancialData: () => void;
+  onImportHistoricalBusinessSales: () => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   allIncomes: Income[];
@@ -8153,6 +8158,7 @@ function SettingsView({
             realBalance={realBalance}
             user={user}
             onResetFinancialData={onResetFinancialData}
+            onImportHistoricalBusinessSales={onImportHistoricalBusinessSales}
           />
         ) : null}
       </div>
@@ -8630,6 +8636,7 @@ function DataPanel({
   realBalance,
   user,
   onResetFinancialData,
+  onImportHistoricalBusinessSales,
 }: {
   incomes: Income[];
   bills: Bill[];
@@ -8638,6 +8645,7 @@ function DataPanel({
   realBalance: RealBalance;
   user: UserProfile;
   onResetFinancialData: () => void;
+  onImportHistoricalBusinessSales: () => void;
 }) {
   const options = buildMonthOptions(getAccountCreatedAt());
   const [modalOpen, setModalOpen] = useState(false);
@@ -8894,6 +8902,24 @@ function DataPanel({
             className="inline-flex h-12 shrink-0 items-center justify-center rounded-2xl bg-red-600 px-5 text-sm font-extrabold text-white shadow-lg shadow-red-600/15 transition hover:bg-red-700"
           >
             Zerar tudo
+          </button>
+        </div>
+      </Card>
+      <Card className="border-emerald-500/20 bg-emerald-500/[0.04] p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700">Histórico enviado</p>
+            <h3 className="mt-2 text-lg font-extrabold">Importar vendas antigas</h3>
+            <p className="mt-2 max-w-2xl text-xs font-semibold leading-5 text-[var(--muted)]">
+              Importa os registros enviados de 2022 a 2026 para a área Empresa. Os casos confusos ficam com a anotação original no campo de observações.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onImportHistoricalBusinessSales}
+            className="inline-flex h-12 shrink-0 items-center justify-center rounded-2xl bg-[#0f766e] px-5 text-sm font-extrabold text-white shadow-lg shadow-[#0f766e]/15 transition hover:bg-[#115e59]"
+          >
+            Importar histórico
           </button>
         </div>
       </Card>
@@ -9480,6 +9506,7 @@ function ActiveView({
   onOpenCategoryModal,
   onConfirmDanger,
   onResetFinancialData,
+  onImportHistoricalBusinessSales,
   darkMode,
   setDarkMode,
   realBalance,
@@ -9543,6 +9570,7 @@ function ActiveView({
   onOpenCategoryModal: () => void;
   onConfirmDanger: (title: string, message: string, onConfirm?: () => void) => void;
   onResetFinancialData: () => void;
+  onImportHistoricalBusinessSales: () => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   realBalance: RealBalance;
@@ -9714,6 +9742,7 @@ function ActiveView({
         onOpenCategoryModal={onOpenCategoryModal}
         onConfirmDanger={onConfirmDanger}
         onResetFinancialData={onResetFinancialData}
+        onImportHistoricalBusinessSales={onImportHistoricalBusinessSales}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         allIncomes={allIncomes}
@@ -10714,6 +10743,28 @@ export default function ReveeNorthApp() {
     );
   };
 
+  const handleImportHistoricalBusinessSales = () => {
+    confirmDanger(
+      "Importar histórico enviado?",
+      `Isso adiciona ${historicalBusinessSalesImport.length} vendas antigas na área Empresa. Se algum registro já tiver sido importado antes, ele não será duplicado.`,
+      () => {
+        setBusiness((current) => {
+          const existingIds = new Set(current.sales.map((sale) => sale.id));
+          const importedSales = historicalBusinessSalesImport.filter((sale) => !existingIds.has(sale.id));
+          const nextBusiness = {
+            ...current,
+            sales: [...current.sales, ...importedSales].sort((a, b) => a.closedDate.localeCompare(b.closedDate)),
+          };
+          persistCloudPatchNow({ business: nextBusiness, workspaceMode: "business" });
+          return nextBusiness;
+        });
+        setWorkspaceMode("business");
+        setActive("Vendas");
+        showFeedback("Histórico importado.", "As vendas antigas foram adicionadas na empresa.");
+      },
+    );
+  };
+
   const handleCompleteOnboarding = (answers: OnboardingData) => {
     localStorage.setItem("reveenorth:onboarding", JSON.stringify(answers));
     localStorage.setItem("reveenorth:onboarding-complete", "true");
@@ -11060,6 +11111,7 @@ export default function ReveeNorthApp() {
             onOpenCategoryModal={() => setCategoryModalOpen(true)}
             onConfirmDanger={confirmDanger}
             onResetFinancialData={handleResetFinancialData}
+            onImportHistoricalBusinessSales={handleImportHistoricalBusinessSales}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
             realBalance={realBalance}
