@@ -115,10 +115,20 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
   { label: "Entradas", icon: ArrowDownLeft },
   { label: "Contas", icon: ReceiptText },
+  { label: "Dívidas", icon: BadgeDollarSign },
   { label: "Metas", icon: Target },
   { label: "Objetivos do mês", icon: Flag },
   { label: "Planejamento", icon: LineChart },
   { label: "Relatórios", icon: FileText },
+];
+
+const businessNavItems = [
+  { label: "Dashboard", icon: LayoutDashboard },
+  { label: "Vendas", icon: ArrowDownLeft },
+  { label: "Saídas", icon: ReceiptText },
+  { label: "Pró-labore", icon: Users },
+  { label: "Investimentos", icon: PiggyBank },
+  { label: "Balanço", icon: BarChart3 },
 ];
 
 const DEFAULT_ACCOUNT_CREATED_AT = "2026-06-11";
@@ -283,6 +293,110 @@ type CalculatorRules = {
   smartPriority: boolean;
 };
 
+type NameCleanupDebt = {
+  id: number;
+  name: string;
+  origin: string;
+  originalAmount: number;
+  currentAmount: number;
+  status: "aberta" | "paga";
+  createdAt: string;
+  paidAt?: string;
+  paidAmount?: number;
+  notes?: string;
+};
+
+type PlanningDistributionItem = {
+  id: string;
+  label: string;
+  helper: string;
+  value: number;
+  icon: string;
+  tone: string;
+};
+
+type PlanningMonthGoal = {
+  id: number;
+  title: string;
+  helper: string;
+  amount: number;
+  done: boolean;
+};
+
+type PlanningExpectedExpense = {
+  id: number;
+  title: string;
+  amount: number;
+};
+
+type PlanningState = {
+  plannedIncome: number;
+  style: "equilibrado" | "conservador" | "agressivo";
+  distribution: PlanningDistributionItem[];
+  monthGoals: PlanningMonthGoal[];
+  expectedExpenses: PlanningExpectedExpense[];
+};
+
+type WorkspaceMode = "personal" | "business";
+
+type BusinessPaymentMethod = "Pix" | "Boleto" | "Cartão de crédito";
+
+type BusinessInstallment = {
+  id: number;
+  dueDate: string;
+  amount: number;
+  received: boolean;
+  receivedAmount?: number;
+  receivedDate?: string;
+};
+
+type BusinessSale = {
+  id: number;
+  clientName: string;
+  service: string;
+  closedAmount: number;
+  receivedAmount: number;
+  receivedDate?: string;
+  closedDate: string;
+  paymentMethod: BusinessPaymentMethod;
+  cardFee: number;
+  installments: BusinessInstallment[];
+  notes?: string;
+};
+
+type BusinessPayroll = {
+  id: number;
+  personName: string;
+  type: "Pró-labore" | "Bônus";
+  amount: number;
+  paidDate: string;
+  notes?: string;
+};
+
+type BusinessInvestment = {
+  id: number;
+  name: string;
+  type: "Reserva" | "Investimento";
+  amount: number;
+  date: string;
+  notes?: string;
+};
+
+type BusinessSettings = {
+  annualRevenueGoal: number;
+  monthlyRevenueGoal: number;
+  monthlyProLaboreGoal: number;
+};
+
+type BusinessState = {
+  sales: BusinessSale[];
+  expenses: Bill[];
+  payroll: BusinessPayroll[];
+  investments: BusinessInvestment[];
+  categories: Category[];
+  settings: BusinessSettings;
+};
+
 type ReveeNorthCloudState = {
   version: 1;
   updatedAt?: string;
@@ -292,10 +406,14 @@ type ReveeNorthCloudState = {
   user: UserProfile;
   realBalance: RealBalance;
   bills: Bill[];
+  debts?: NameCleanupDebt[];
   incomes: Income[];
   goals: Goal[];
   objectives: MonthlyObjective[];
+  planning?: PlanningState;
   categories: Category[];
+  workspaceMode?: WorkspaceMode;
+  business?: BusinessState;
   preferences: FinancePreferences;
   rules: CalculatorRules;
   notifications: NotificationSettings;
@@ -567,6 +685,269 @@ function buildMonthRange(fromMonth: string, toMonth: string) {
     months.push(value);
   }
   return months;
+}
+
+function endOfYearMonth(month: string) {
+  return `${month.slice(0, 4)}-12`;
+}
+
+function monthsRemainingInYear(month: string) {
+  return Math.max(1, monthDistance(month, endOfYearMonth(month)) + 1);
+}
+
+const initialBusinessCategories: Category[] = [
+  { id: 5001, name: "Ferramentas", icon: "Briefcase", color: "#0f766e", type: "conta", active: true },
+  { id: 5002, name: "Softwares", icon: "Database", color: "#2563eb", type: "conta", active: true },
+  { id: 5003, name: "Impostos", icon: "BadgeDollarSign", color: "#64748b", type: "conta", active: true },
+  { id: 5004, name: "Marketing", icon: "BarChart3", color: "#db2777", type: "conta", active: true },
+  { id: 5005, name: "Operacional", icon: "Folder", color: "#14b8a6", type: "conta", active: true },
+];
+
+const exampleBusinessSales: BusinessSale[] = [
+  {
+    id: 7001,
+    clientName: "Studio Aurora",
+    service: "Mentoria estratégica",
+    closedAmount: 3200,
+    receivedAmount: 3092,
+    receivedDate: "2026-09-02",
+    closedDate: "2026-08-20",
+    paymentMethod: "Cartão de crédito",
+    cardFee: 108,
+    installments: [],
+    notes: "Exemplo de venda no cartão com taxa.",
+  },
+  {
+    id: 7002,
+    clientName: "Clínica Bela Forma",
+    service: "Implementação de CRM",
+    closedAmount: 4800,
+    receivedAmount: 4800,
+    receivedDate: "2026-09-04",
+    closedDate: "2026-09-04",
+    paymentMethod: "Pix",
+    cardFee: 0,
+    installments: [],
+    notes: "Exemplo de venda recebida à vista.",
+  },
+  {
+    id: 7003,
+    clientName: "North Beauty",
+    service: "Projeto de operação comercial",
+    closedAmount: 6000,
+    receivedAmount: 0,
+    closedDate: "2026-09-12",
+    paymentMethod: "Boleto",
+    cardFee: 0,
+    installments: [
+      { id: 7101, dueDate: "2026-09-10", amount: 1500, received: true, receivedDate: "2026-09-10" },
+      { id: 7102, dueDate: "2026-10-10", amount: 1500, received: false },
+      { id: 7103, dueDate: "2026-11-10", amount: 1500, received: false },
+      { id: 7104, dueDate: "2026-12-10", amount: 1500, received: false },
+    ],
+    notes: "Exemplo de boleto parcelado em 4x.",
+  },
+  {
+    id: 7004,
+    clientName: "Revee Academy",
+    service: "Treinamento de equipe",
+    closedAmount: 2500,
+    receivedAmount: 2415,
+    receivedDate: "2026-10-02",
+    closedDate: "2026-09-18",
+    paymentMethod: "Cartão de crédito",
+    cardFee: 85,
+    installments: [],
+    notes: "Exemplo de taxa de cartão no mês.",
+  },
+];
+
+const exampleBusinessExpenses: Bill[] = [
+  { id: 7201, name: "Simples Nacional", category: "Impostos", dueDate: "2026-08-20", expectedAmount: 380, status: "paga", paidDate: "2026-08-19", paidAmount: 380, notes: "Exemplo de imposto pago." },
+  { id: 7202, name: "Notion e automações", category: "Softwares", dueDate: "2026-09-05", expectedAmount: 149, status: "paga", paidDate: "2026-09-05", paidAmount: 149, notes: "Exemplo de software." },
+  { id: 7203, name: "Google Workspace", category: "Softwares", dueDate: "2026-09-10", expectedAmount: 86, status: "paga", paidDate: "2026-09-10", paidAmount: 86, notes: "Exemplo de assinatura." },
+  { id: 7204, name: "Gestor de tráfego", category: "Marketing", dueDate: "2026-09-15", expectedAmount: 900, status: "paga", paidDate: "2026-09-15", paidAmount: 900, notes: "Exemplo de marketing." },
+  { id: 7205, name: "DARF mensal", category: "Impostos", dueDate: "2026-09-20", expectedAmount: 620, status: "pendente", notes: "Exemplo de imposto em aberto." },
+];
+
+const exampleBusinessPayroll: BusinessPayroll[] = [
+  { id: 7301, personName: "Daniela Escatalini", type: "Pró-labore", amount: 2500, paidDate: "2026-09-06", notes: "Exemplo de pró-labore." },
+  { id: 7302, personName: "Assistente comercial", type: "Bônus", amount: 350, paidDate: "2026-09-22", notes: "Exemplo de bônus." },
+];
+
+const exampleBusinessInvestments: BusinessInvestment[] = [
+  { id: 7401, name: "Reserva da empresa", type: "Reserva", amount: 1200, date: "2026-09-08", notes: "Dinheiro guardado para segurança da operação." },
+  { id: 7402, name: "CDB liquidez diária", type: "Investimento", amount: 800, date: "2026-09-25", notes: "Exemplo de investimento da empresa." },
+];
+
+const defaultBusinessState = (): BusinessState => ({
+  sales: exampleBusinessSales,
+  expenses: exampleBusinessExpenses,
+  payroll: exampleBusinessPayroll,
+  investments: exampleBusinessInvestments,
+  categories: initialBusinessCategories,
+  settings: {
+    annualRevenueGoal: 100000,
+    monthlyRevenueGoal: 12000,
+    monthlyProLaboreGoal: 4500,
+  },
+});
+
+function sanitizeBusinessState(state?: Partial<BusinessState>): BusinessState {
+  const defaults = defaultBusinessState();
+  const currentCategories = Array.isArray(state?.categories) && state.categories.length ? state.categories : defaults.categories;
+  const categories = [
+    ...currentCategories,
+    ...defaults.categories.filter(
+      (category) => !currentCategories.some((current) => normalizeCategoryName(current.name) === normalizeCategoryName(category.name)),
+    ),
+  ];
+  return {
+    sales: Array.isArray(state?.sales) && state.sales.length ? state.sales : defaults.sales,
+    expenses: Array.isArray(state?.expenses) && state.expenses.length ? state.expenses : defaults.expenses,
+    payroll: Array.isArray(state?.payroll) && state.payroll.length ? state.payroll : defaults.payroll,
+    investments: Array.isArray(state?.investments) && state.investments.length ? state.investments : defaults.investments,
+    categories,
+    settings: {
+      ...defaults.settings,
+      ...(state?.settings ?? {}),
+    },
+  };
+}
+
+function mergeBusinessExamples(state: BusinessState): BusinessState {
+  return {
+    ...state,
+    sales: [
+      ...state.sales,
+      ...exampleBusinessSales.filter((sale) => !state.sales.some((current) => current.id === sale.id)),
+    ],
+    expenses: [
+      ...state.expenses,
+      ...exampleBusinessExpenses.filter((expense) => !state.expenses.some((current) => current.id === expense.id)),
+    ],
+    payroll: [
+      ...state.payroll,
+      ...exampleBusinessPayroll.filter((payroll) => !state.payroll.some((current) => current.id === payroll.id)),
+    ],
+    investments: [
+      ...(state.investments ?? []),
+      ...exampleBusinessInvestments.filter((investment) => !(state.investments ?? []).some((current) => current.id === investment.id)),
+    ],
+    categories: [
+      ...state.categories,
+      ...initialBusinessCategories.filter(
+        (category) => !state.categories.some((current) => normalizeCategoryName(current.name) === normalizeCategoryName(category.name)),
+      ),
+    ],
+  };
+}
+
+function saleReceivedTotal(sale: BusinessSale) {
+  if (sale.paymentMethod === "Boleto") {
+    return sum(
+      sale.installments.filter((installment) => installment.received),
+      (installment) => installment.receivedAmount ?? installment.amount,
+    );
+  }
+  return sale.receivedAmount;
+}
+
+function saleOpenTotal(sale: BusinessSale) {
+  if (sale.paymentMethod === "Boleto") {
+    return sum(
+      sale.installments,
+      (installment) => Math.max(0, installment.amount - (installment.received ? installment.receivedAmount ?? installment.amount : 0)),
+    );
+  }
+  return Math.max(0, sale.closedAmount - sale.receivedAmount - sale.cardFee);
+}
+
+function buildBusinessMonthData(business: BusinessState, selectedMonth: string) {
+  const sales = business.sales.filter((sale) => monthKey(sale.closedDate) === selectedMonth);
+  const expenses = buildVisibleBills(business.expenses, selectedMonth);
+  const payroll = business.payroll.filter((item) => monthKey(item.paidDate) === selectedMonth);
+  const investments = (business.investments ?? []).filter((item) => monthKey(item.date) === selectedMonth);
+  const installmentSales = business.sales.flatMap((sale) =>
+    sale.installments
+      .filter((installment) => monthKey(installment.dueDate) === selectedMonth || monthKey(installment.receivedDate ?? "") === selectedMonth)
+      .map((installment) => ({ sale, installment })),
+  );
+  const receivables = business.sales.flatMap((sale) =>
+    sale.installments
+      .filter((installment) => monthKey(installment.dueDate) === selectedMonth && (!installment.received || (installment.receivedAmount ?? installment.amount) < installment.amount))
+      .map((installment) => ({ sale, installment })),
+  );
+  const receivedInstallments = business.sales.flatMap((sale) =>
+    sale.installments
+      .filter((installment) => installment.received && monthKey(installment.receivedDate ?? installment.dueDate) === selectedMonth)
+      .map((installment) => ({ sale, installment })),
+  );
+  return { sales, installmentSales, expenses, payroll, investments, receivables, receivedInstallments };
+}
+
+function buildBusinessMetrics(business: BusinessState, selectedMonth: string) {
+  const data = buildBusinessMonthData(business, selectedMonth);
+  const closed = sum(data.sales, (sale) => sale.closedAmount);
+  const receivedFromMonthlySales = sum(
+    business.sales.filter(
+      (sale) =>
+        sale.paymentMethod !== "Boleto" &&
+        sale.receivedAmount > 0 &&
+        monthKey(sale.receivedDate ?? sale.closedDate) === selectedMonth,
+    ),
+    saleReceivedTotal,
+  );
+  const receivedFromInstallments = sum(data.receivedInstallments, (item) => item.installment.receivedAmount ?? item.installment.amount);
+  const received = receivedFromMonthlySales + receivedFromInstallments;
+  const fees = sum(
+    business.sales.filter(
+      (sale) =>
+        sale.paymentMethod === "Cartão de crédito" &&
+        sale.cardFee > 0 &&
+        monthKey(sale.receivedDate ?? sale.closedDate) === selectedMonth,
+    ),
+    (sale) => sale.cardFee,
+  );
+  const open = sum(
+    data.sales.filter((sale) => sale.paymentMethod !== "Boleto"),
+    saleOpenTotal,
+  ) + sum(data.receivables, (item) => item.installment.amount);
+  const expensesPaid = sum(data.expenses.filter((bill) => bill.status === "paga"), (bill) => bill.paidAmount ?? bill.expectedAmount);
+  const expensesOpen = sum(data.expenses.filter((bill) => bill.status !== "paga"), (bill) => bill.expectedAmount);
+  const proLabore = sum(data.payroll.filter((item) => item.type === "Pró-labore"), (item) => item.amount);
+  const bonus = sum(data.payroll.filter((item) => item.type === "Bônus"), (item) => item.amount);
+  const saved = sum(data.investments, (item) => item.amount);
+  const reserveSaved = sum(data.investments.filter((item) => item.type === "Reserva"), (item) => item.amount);
+  const invested = sum(data.investments.filter((item) => item.type === "Investimento"), (item) => item.amount);
+  const yearClosed = sum(
+    business.sales.filter((sale) => sale.closedDate.slice(0, 4) === selectedMonth.slice(0, 4)),
+    (sale) => sale.closedAmount,
+  );
+  const goalRemaining = Math.max(0, business.settings.annualRevenueGoal - yearClosed);
+  const monthlyGoalRequired = goalRemaining / monthsRemainingInYear(selectedMonth);
+  const averageTicket = data.sales.length ? closed / data.sales.length : 0;
+  const profit = received - expensesPaid - proLabore - bonus - fees - saved;
+
+  return {
+    ...data,
+    closed,
+    received,
+    fees,
+    open,
+    expensesPaid,
+    expensesOpen,
+    proLabore,
+    bonus,
+    saved,
+    reserveSaved,
+    invested,
+    yearClosed,
+    goalRemaining,
+    monthlyGoalRequired,
+    averageTicket,
+    profit,
+  };
 }
 
 function daysOverdue(bill: Bill, referenceDate = getTodayKey()) {
@@ -913,6 +1294,41 @@ function buildMetrics(data: MonthData) {
     spendingDelta,
     incomeDelta,
     urgent,
+  };
+}
+
+function buildDefaultPlanningState(metrics: ReturnType<typeof buildMetrics>, rules: CalculatorRules): PlanningState {
+  const plannedIncome = metrics.totalIncome || 6290;
+  const billsBudget = plannedIncome * (rules.bills / 100);
+  const personalBudget = plannedIncome * (rules.personal / 100);
+  const goalsBudget = plannedIncome * (rules.goals / 100);
+  const reserveBudget = plannedIncome * (rules.reserve / 100);
+  const overdueBudget = Math.min(metrics.totalOverdue, billsBudget * 0.3);
+  const remainingBillsBudget = Math.max(0, billsBudget - overdueBudget);
+  return {
+    plannedIncome,
+    style: "equilibrado",
+    distribution: [
+      { id: "essenciais", label: "Essenciais", helper: "Contas fixas e moradia", value: Math.round(remainingBillsBudget * 0.62), icon: "Home", tone: "orange" },
+      { id: "alimentacao", label: "Alimentação", helper: "Mercado, restaurantes", value: Math.round(remainingBillsBudget * 0.22), icon: "ShoppingCart", tone: "green" },
+      { id: "transporte", label: "Transporte", helper: "Combustível, apps, manutenção", value: Math.round(remainingBillsBudget * 0.16), icon: "Car", tone: "blue" },
+      { id: "lazer", label: "Lazer", helper: "Diversão, hobbies, passeios", value: Math.round(personalBudget), icon: "Heart", tone: "red" },
+      { id: "reserva", label: "Reserva", helper: "Reserva de emergência", value: Math.round(reserveBudget), icon: "Shield", tone: "green" },
+      { id: "metas", label: "Metas", helper: "Sonhos e objetivos", value: Math.round(goalsBudget), icon: "Target", tone: "purple" },
+      { id: "atrasadas", label: "Contas atrasadas", helper: "Dívidas e pendências", value: Math.round(overdueBudget), icon: "Zap", tone: "red" },
+    ],
+    monthGoals: [
+      { id: 1, title: "Guardar na reserva", helper: "Ter mais segurança financeira.", amount: 500, done: true },
+      { id: 2, title: "Quitar Energia", helper: "Evitar juros e pendências.", amount: 210, done: true },
+      { id: 3, title: "Comprar óculos", helper: "Melhorar minha qualidade de vida.", amount: 450, done: false },
+      { id: 4, title: "Trocar celular", helper: "Planejado para o segundo semestre.", amount: 1800, done: false },
+    ],
+    expectedExpenses: [
+      { id: 1, title: "Festa Junina Davi", amount: 250 },
+      { id: 2, title: "Presente aniversário", amount: 120 },
+      { id: 3, title: "Manutenção do carro", amount: 300 },
+      { id: 4, title: "Mercado extra", amount: 200 },
+    ],
   };
 }
 
@@ -1638,6 +2054,8 @@ function MonthStatusCard({
 function Sidebar({
   active,
   setActive,
+  workspaceMode,
+  setWorkspaceMode,
   darkMode,
   setDarkMode,
   isOpen,
@@ -1651,6 +2069,8 @@ function Sidebar({
 }: {
   active: string;
   setActive: (value: string) => void;
+  workspaceMode: WorkspaceMode;
+  setWorkspaceMode: (value: WorkspaceMode) => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   isOpen: boolean;
@@ -1663,6 +2083,13 @@ function Sidebar({
   onConfirmLogout: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const currentNavItems = workspaceMode === "business" ? businessNavItems : navItems;
+  const modeLabel = workspaceMode === "business" ? "Pessoal" : "Empresa";
+  const toggleMode = () => {
+    setWorkspaceMode(workspaceMode === "business" ? "personal" : "business");
+    setActive("Dashboard");
+    setIsOpen(false);
+  };
 
   return (
     <>
@@ -1675,7 +2102,7 @@ function Sidebar({
         <Menu className="h-5 w-5" />
       </button>
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r border-white/10 bg-[#050505] py-4 text-white shadow-2xl transition-all duration-300 lg:translate-x-0 ${
+        className={`app-sidebar fixed inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r border-white/10 bg-[#050505] py-4 text-white shadow-2xl transition-all duration-300 lg:translate-x-0 ${
           collapsed ? "w-[76px] px-2" : "w-[min(300px,calc(100vw-1rem))] px-4 sm:w-[280px]"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full"
@@ -1693,17 +2120,17 @@ function Sidebar({
         <div className={`flex ${collapsed ? "flex-col items-center gap-3" : "items-start justify-between gap-5 pl-0 pr-0"}`}>
           <div className={`min-w-0 ${collapsed ? "hidden" : "block"}`}>
             <div className="flex items-center gap-2.5">
-              <BrandSymbol className="h-9 w-9 shrink-0" />
+              {workspaceMode === "business" ? <BusinessBrandSymbol className="h-9 w-9 shrink-0" /> : <BrandSymbol className="h-9 w-9 shrink-0" />}
               <p className="text-[1.72rem] font-semibold leading-none tracking-tight">
                 Revee<span className="font-extrabold">North</span>
               </p>
             </div>
             <p className="mt-2 text-sm font-medium leading-6 text-white">
-              Seu dinheiro com direção
+              {workspaceMode === "business" ? "Empresa com direção" : "Seu dinheiro com direção"}
             </p>
           </div>
           {collapsed ? (
-            <BrandSymbol className="h-9 w-9" />
+            workspaceMode === "business" ? <BusinessBrandSymbol className="h-9 w-9" /> : <BrandSymbol className="h-9 w-9" />
           ) : null}
           <button
             type="button"
@@ -1716,7 +2143,35 @@ function Sidebar({
         </div>
 
         <nav className={`${collapsed ? "mt-7 flex flex-1 flex-col items-center justify-start gap-3.5 overflow-y-auto" : "mt-7 space-y-1.5 overflow-y-auto pr-1"}`}>
-          {navItems.map((item) => {
+          {!collapsed ? (
+            <button
+              type="button"
+              onClick={toggleMode}
+              className={`mb-3 flex w-full items-center justify-between gap-3 rounded-2xl border px-3.5 py-3 text-left text-[13px] font-extrabold transition ${
+                workspaceMode === "business"
+                  ? "border-emerald-300/22 bg-emerald-400/12 text-white"
+                  : "border-white/12 bg-white/8 text-white hover:bg-white/12"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                {workspaceMode === "business" ? <User className="h-4 w-4 text-emerald-300" /> : <Building2 className="h-4 w-4 text-[#d75c27]" />}
+                {modeLabel}
+              </span>
+              <RefreshCw className="h-4 w-4 text-white/55" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={toggleMode}
+              title={workspaceMode === "business" ? "Voltar para Pessoal" : "Abrir Empresa"}
+              className={`mb-3 flex h-11 w-11 items-center justify-center rounded-full ${
+                workspaceMode === "business" ? "bg-emerald-400/12 text-emerald-300 ring-1 ring-emerald-300/24" : "bg-white/8 text-[#d75c27]"
+              }`}
+            >
+              {workspaceMode === "business" ? <User className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
+            </button>
+          )}
+          {currentNavItems.map((item) => {
             const Icon = item.icon;
             const selected = active === item.label;
             return (
@@ -1732,12 +2187,14 @@ function Sidebar({
                   collapsed ? "h-11 w-11 justify-center rounded-full px-0 py-0" : "w-full gap-3 rounded-2xl px-3.5 py-2.5"
                 } ${
                   selected
-                    ? collapsed ? "bg-[#d75c27]/14 text-white ring-1 ring-[#d75c27]/30" : "bg-[#d75c27]/12 text-white"
-                    : "text-white hover:bg-[#d75c27]/8"
+                    ? workspaceMode === "business"
+                      ? collapsed ? "bg-emerald-400/14 text-white ring-1 ring-emerald-300/30" : "bg-emerald-400/12 text-white"
+                      : collapsed ? "bg-[#d75c27]/14 text-white ring-1 ring-[#d75c27]/30" : "bg-[#d75c27]/12 text-white"
+                    : workspaceMode === "business" ? "text-white hover:bg-emerald-400/8" : "text-white hover:bg-[#d75c27]/8"
                 }`}
               >
                 <Icon
-                  className={`h-4 w-4 ${selected ? "text-[#d75c27]" : "text-white"}`}
+                  className={`h-4 w-4 ${selected ? workspaceMode === "business" ? "text-emerald-300" : "text-[#d75c27]" : "text-white"}`}
                 />
                 {!collapsed ? item.label : null}
               </button>
@@ -1747,7 +2204,7 @@ function Sidebar({
 
         <div className="relative mt-auto shrink-0 pt-3">
           {menuOpen && !collapsed ? (
-            <div className="app-popover absolute bottom-[76px] left-0 right-0 rounded-3xl border border-white/70 bg-[#f4f1ee]/98 p-2 text-[#211d19] shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#050505] dark:text-white">
+            <div className="app-popover app-profile-menu absolute bottom-[76px] left-0 right-0 rounded-3xl border border-white/70 bg-[#f4f1ee]/98 p-2 text-[#211d19] shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#050505] dark:text-white">
               <MenuItem icon={User} label="Meu perfil" onClick={onOpenProfile} />
               <div className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-xs font-semibold transition hover:bg-[#211d19]/8 dark:hover:bg-white/10">
                 <span className="flex items-center gap-2 text-xs font-semibold text-inherit">
@@ -2778,7 +3235,7 @@ function IncomesView({
 function StatusPill({ status }: { status: BillStatus }) {
   const classes = {
     pendente: "border border-amber-500/25 bg-amber-500/12 text-amber-700 dark:border-amber-300/35 dark:bg-amber-300/12 dark:text-amber-200",
-    paga: "border border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:border-emerald-300/35 dark:bg-emerald-300/12 dark:text-emerald-200",
+    paga: "border border-emerald-500/25 bg-emerald-500/12 text-[#0f766e] dark:border-emerald-300/35 dark:bg-[#0f766e]/12 dark:text-[#0f766e]",
     atrasada: "border border-red-500/25 bg-red-500/12 text-red-600 dark:border-red-300/35 dark:bg-red-300/12 dark:text-red-200",
   };
 
@@ -2845,7 +3302,7 @@ function BillsView({
   };
   const summaryItems = [
     { label: "Total geral", value: formatCurrency(totalOverall), helper: `${bills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
-    { label: "Já pago", value: formatCurrency(totalPaid), helper: `${paidBills.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-emerald-500/10 text-emerald-700" },
+    { label: "Já pago", value: formatCurrency(totalPaid), helper: `${paidBills.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-[#0f766e]/16 text-[#0f766e]" },
     { label: "Falta pagar", value: formatCurrency(totalMissing), helper: `${pendingOrOverdueBills.length} conta(s) abertas`, icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
   ];
 
@@ -3129,6 +3586,910 @@ function Field({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-1.5 text-xs font-bold text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function BusinessMetricCard({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone = "green",
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  icon: React.ElementType;
+  tone?: "green" | "blue" | "amber" | "dark";
+}) {
+  const styles = {
+    green: { accent: "#0f766e", soft: "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-300/12 dark:text-[#a4f4cf]" },
+    blue: { accent: "#2563eb", soft: "bg-blue-500/10 text-blue-700 dark:text-blue-200" },
+    amber: { accent: "#94a3b8", soft: "bg-slate-500/10 text-slate-700 dark:bg-white/10 dark:text-slate-100" },
+    dark: { accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19] dark:bg-white/10 dark:text-white" },
+  }[tone];
+
+  return (
+    <div
+      className="relative min-h-[132px] overflow-hidden rounded-[26px] border bg-[linear-gradient(145deg,rgba(255,255,255,.9),rgba(248,250,249,.68))] p-4 text-[#211d19] backdrop-blur-2xl dark:bg-white/6 dark:text-white"
+      style={{ borderColor: `${styles.accent}28`, boxShadow: `0 6px 18px rgba(33,29,25,.035), 0 0 0 1px ${styles.accent}08` }}
+    >
+      <span className="absolute -right-12 -top-12 h-28 w-28 rounded-full opacity-[0.05] blur-2xl" style={{ background: styles.accent }} />
+      <span className={`relative flex h-9 w-9 items-center justify-center rounded-2xl ${styles.soft}`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <p className="relative mt-4 text-[9px] font-black uppercase tracking-[0.14em] text-[#64748b] dark:text-white/58">{label}</p>
+      <p className="relative mt-2 text-xl font-black leading-tight">{value}</p>
+      <p className="relative mt-1 text-[11px] font-bold leading-4 text-[#64748b] dark:text-white/58">{helper}</p>
+    </div>
+  );
+}
+
+function BusinessAnnualCalendar({
+  business,
+  selectedMonth,
+  setSelectedMonth,
+  onReceiveInstallment,
+  onReceiveSaleBalance,
+  onPayExpense,
+}: {
+  business: BusinessState;
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+  onReceiveInstallment: (saleId: number, installmentId: number, receivedDate?: string) => void;
+  onReceiveSaleBalance: (saleId: number, receivedDate?: string) => void;
+  onPayExpense: (billId: number, paidDate?: string) => void;
+}) {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [year, monthNumber] = selectedMonth.split("-").map(Number);
+  const today = getTodayKey();
+  const selectedMonthLabel = monthLabel(selectedMonth);
+  const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const events = [
+    ...business.sales.flatMap((sale) =>
+      sale.installments
+        .map((installment) => ({
+          id: `receivable-${sale.id}-${installment.id}`,
+          date: installment.dueDate,
+          type: "receive" as const,
+          source: "installment" as const,
+          saleId: sale.id,
+          installmentId: installment.id,
+          done: installment.received,
+          title: sale.clientName,
+          description: `${sale.service} • ${installment.received ? formatCurrency(installment.receivedAmount ?? installment.amount) : formatCurrency(installment.amount)}`,
+        })),
+    ),
+    ...business.sales
+      .filter((sale) => sale.paymentMethod !== "Boleto" && (saleOpenTotal(sale) > 0 || saleReceivedTotal(sale) > 0))
+      .map((sale) => ({
+        id: `open-sale-${sale.id}`,
+        date: sale.closedDate,
+        type: "receive" as const,
+        source: "sale-balance" as const,
+        saleId: sale.id,
+        done: saleOpenTotal(sale) <= 0,
+        title: sale.clientName,
+        description: saleOpenTotal(sale) > 0 ? `Saldo em aberto • ${formatCurrency(saleOpenTotal(sale))}` : `Recebido • ${formatCurrency(saleReceivedTotal(sale))}`,
+      })),
+    ...business.expenses
+      .map((bill) => ({
+        id: `bill-${bill.id}`,
+        date: bill.dueDate,
+        type: "pay" as const,
+        source: "expense" as const,
+        billId: bill.id,
+        done: bill.status === "paga",
+        title: bill.name,
+        description: `${bill.category} • ${formatCurrency(bill.expectedAmount)}`,
+      })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  const eventsByDate = events.reduce<Record<string, typeof events>>((acc, event) => {
+    acc[event.date] = [...(acc[event.date] ?? []), event];
+    return acc;
+  }, {});
+  const monthStart = `${selectedMonth}-01`;
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const monthEnd = `${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`;
+  const upcomingReference = selectedMonth < today.slice(0, 7) ? monthStart : today > monthStart ? today : monthStart;
+  const upcoming = events
+    .filter((event) => !event.done && event.date >= upcomingReference && event.date <= monthEnd)
+    .slice(0, 5);
+  const firstDay = new Date(year, monthNumber - 1, 1).getDay();
+  const calendarStart = new Date(year, monthNumber - 1, 1 - firstDay);
+  const calendarDays = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return {
+      date: `${month}-${String(date.getDate()).padStart(2, "0")}`,
+      day: date.getDate(),
+      inMonth: month === selectedMonth,
+    };
+  });
+  const compactDate = (date: string) =>
+    new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(`${date}T12:00:00`));
+  const selectedDayEvents = selectedDay ? eventsByDate[selectedDay] ?? [] : [];
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-[#a4f4cf]">Agenda do mês</p>
+          <h3 className="mt-2 text-xl font-black">Recebimentos e contas a pagar</h3>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/54 p-1 dark:bg-white/6">
+            <button
+              type="button"
+              onClick={() => setSelectedMonth(addMonths(selectedMonth, -1))}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--foreground)] transition hover:bg-[#0f766e]/10"
+              aria-label="Mês anterior"
+            >
+              <ChevronRight className="h-4 w-4 rotate-180" />
+            </button>
+            <p className="min-w-[160px] text-center text-sm font-black">{selectedMonthLabel}</p>
+            <button
+              type="button"
+              onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--foreground)] transition hover:bg-[#0f766e]/10"
+              aria-label="Próximo mês"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3 text-[11px] font-bold text-[var(--muted)]">
+            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#0f766e]" />Receber</span>
+            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#64748b]" />Pagar</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_320px]">
+        <div className="rounded-[24px] border border-[var(--line)] bg-white/36 p-3 dark:bg-white/5 sm:p-4">
+          <div className="grid grid-cols-7 gap-1.5">
+            {weekDays.map((day) => (
+              <span key={day} className="py-2 text-center text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">{day}</span>
+            ))}
+            {calendarDays.map(({ date, day, inMonth }) => {
+              const dayEvents = eventsByDate[date] ?? [];
+              const hasReceive = dayEvents.some((event) => event.type === "receive");
+              const hasPay = dayEvents.some((event) => event.type === "pay");
+              const isToday = date === today;
+              const visibleEvents = dayEvents.slice(0, 2);
+              const hiddenCount = Math.max(0, dayEvents.length - visibleEvents.length);
+              const dayLabel = dayEvents.map((event) => `${event.title}: ${event.description}`).join("\n");
+              return (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  key={date}
+                  title={dayLabel}
+                  onClick={() => setSelectedDay(date)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") setSelectedDay(date);
+                  }}
+                  className={`min-h-[86px] rounded-2xl border p-2 transition sm:min-h-[104px] ${
+                    isToday
+                      ? "border-[#0f766e]/45 bg-[#0f766e]/8"
+                      : inMonth
+                        ? "border-[var(--line)] bg-white/58 dark:bg-white/6"
+                        : "border-transparent bg-transparent opacity-45"
+                  } cursor-pointer hover:border-[#0f766e]/32 hover:bg-[#0f766e]/5`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-black ${
+                      isToday ? "bg-[#0f766e] text-white" : inMonth ? "text-[var(--foreground)]" : "text-[var(--muted)]"
+                    }`}>
+                      {day}
+                    </span>
+                    {dayEvents.length ? (
+                      <span className="flex gap-1">
+                        {hasReceive ? <span className="h-2 w-2 rounded-full bg-[#0f766e] dark:bg-[#a4f4cf]" /> : null}
+                        {hasPay ? <span className="h-2 w-2 rounded-full bg-[#64748b] dark:bg-white/70" /> : null}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {visibleEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className={`truncate rounded-lg px-2 py-1 text-[10px] font-bold ${
+                          event.done
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-[#a4f4cf]"
+                            : event.type === "receive"
+                              ? "bg-[#0f766e]/10 text-[#0f766e] dark:text-[#a4f4cf]"
+                              : "bg-[#64748b]/10 text-[#475569] dark:text-white/80"
+                        }`}
+                      >
+                        {event.done ? event.type === "receive" ? "Recebido" : "Paga" : event.type === "receive" ? "Receber" : "Pagar"} • {event.title}
+                      </div>
+                    ))}
+                    {hiddenCount ? <p className="px-2 text-[10px] font-bold text-[var(--muted)]">+{hiddenCount} item(ns)</p> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-[24px] border border-[var(--line)] bg-white/42 p-4 dark:bg-white/5">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-[#a4f4cf]">Próximos dias</p>
+          <div className="mt-3 space-y-2">
+            {upcoming.map((event) => (
+              <div key={event.id} className="rounded-2xl border border-[var(--line)] bg-white/58 p-3 dark:bg-white/6">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-extrabold">{event.title}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-[var(--muted)]">{event.description}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${event.type === "receive" ? "bg-[#0f766e]/10 text-[#0f766e] dark:text-[#a4f4cf]" : "bg-[#64748b]/10 text-[#475569] dark:text-white/80"}`}>
+                    {compactDate(event.date)}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {!upcoming.length ? (
+              <p className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-center text-xs font-semibold text-[var(--muted)]">
+                Nenhum recebimento ou pagamento pendente neste mês.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      {selectedDay ? (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/24 px-4 backdrop-blur-sm" onClick={() => setSelectedDay(null)}>
+          <div
+            className="w-full max-w-md rounded-[28px] border border-white/70 bg-[#fbfbfa]/98 p-5 text-[#211d19] shadow-2xl dark:border-white/12 dark:bg-[#07110f]/98 dark:text-white"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#0f766e] dark:text-[#a4f4cf]">Agenda do dia</p>
+                <h3 className="mt-2 text-lg font-black">{formatDate(selectedDay)}</h3>
+              </div>
+              <button type="button" onClick={() => setSelectedDay(null)} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#211d19]/6 text-[#211d19] transition hover:bg-[#211d19]/10 dark:bg-white/10 dark:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {selectedDayEvents.map((event) => (
+                <div key={event.id} className="rounded-2xl border border-[var(--line)] bg-white/70 p-3 dark:bg-white/7">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${event.type === "receive" ? "bg-[#0f766e]/10 text-[#0f766e] dark:text-[#a4f4cf]" : "bg-[#64748b]/10 text-[#475569] dark:text-white/80"}`}>
+                      {event.type === "receive" ? <ArrowDownLeft className="h-4 w-4" /> : <ReceiptText className="h-4 w-4" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold">{event.type === "receive" ? "Entrada" : "Saída"} • {event.title}</p>
+                      <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{event.description}</p>
+                      <p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${
+                        event.done
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-[#a4f4cf]"
+                          : "bg-[#64748b]/10 text-[#475569] dark:text-white/80"
+                      }`}>
+                        {event.done ? event.type === "receive" ? "Recebido" : "Paga" : "Pendente"}
+                      </p>
+                    </div>
+                  </div>
+                  {!event.done ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (event.source === "installment") onReceiveInstallment(event.saleId, event.installmentId, selectedDay);
+                        if (event.source === "sale-balance") onReceiveSaleBalance(event.saleId, selectedDay);
+                        if (event.source === "expense") onPayExpense(event.billId, selectedDay);
+                      }}
+                      className={`mt-3 w-full rounded-2xl px-4 py-2.5 text-xs font-extrabold text-white ${
+                        event.type === "receive" ? "bg-[#0f766e]" : "bg-[#64748b]"
+                      }`}
+                    >
+                      {event.type === "receive" ? "Receber" : "Marcar como paga"}
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {!selectedDayEvents.length ? (
+                <p className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-center text-sm font-semibold text-[var(--muted)]">
+                  Nenhuma entrada ou saída marcada neste dia.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function BusinessDashboard({
+  business,
+  selectedMonth,
+  setSelectedMonth,
+  onReceiveBusinessInstallment,
+  onReceiveBusinessSaleBalance,
+  onPayBusinessExpense,
+  onUpdateMonthlyRevenueGoal,
+  onOpenPayroll,
+  onOpenInvestments,
+  onOpenBalance,
+}: {
+  business: BusinessState;
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+  onReceiveBusinessInstallment: (saleId: number, installmentId: number, receivedDate?: string) => void;
+  onReceiveBusinessSaleBalance: (saleId: number, receivedDate?: string) => void;
+  onPayBusinessExpense: (billId: number, paidDate?: string) => void;
+  onUpdateMonthlyRevenueGoal: (value: number) => void;
+  onOpenPayroll: () => void;
+  onOpenInvestments: () => void;
+  onOpenBalance: () => void;
+}) {
+  const metrics = buildBusinessMetrics(business, selectedMonth);
+  const proLaboreGap = business.settings.monthlyProLaboreGoal - metrics.proLabore;
+  const goalProgress = business.settings.annualRevenueGoal
+    ? Math.min(100, Math.round((metrics.yearClosed / business.settings.annualRevenueGoal) * 100))
+    : 0;
+  const monthlyRevenueGoal = Math.max(0, business.settings.monthlyRevenueGoal || metrics.monthlyGoalRequired || 0);
+  const monthlyGoalProgress = monthlyRevenueGoal ? Math.min(100, Math.round((metrics.closed / monthlyRevenueGoal) * 100)) : 0;
+  const monthlyGoalGap = monthlyRevenueGoal - metrics.closed;
+
+  return (
+    <div className="space-y-4">
+      <Card className="relative overflow-hidden border-[#0f766e]/18 bg-[linear-gradient(135deg,rgba(236,253,245,.98),rgba(255,255,255,.96)_50%,rgba(224,252,239,.86))] p-5 shadow-[0_18px_46px_rgba(15,118,110,.08)] dark:bg-[linear-gradient(135deg,rgba(5,46,38,.96),rgba(10,20,18,.9)_52%,rgba(15,118,110,.72))] sm:p-6">
+        <BusinessBrandSymbol className="pointer-events-none absolute -right-8 -bottom-10 h-40 w-40 opacity-[0.055] dark:opacity-[0.1] sm:h-52 sm:w-52" />
+        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-center">
+          <section>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-[#a4f4cf]">Meta do mês</p>
+                <span className="rounded-full bg-[#0f766e]/10 px-3 py-1 text-[10px] font-black text-[#0f766e] dark:bg-[#a4f4cf]/12 dark:text-[#a4f4cf]">
+                  {monthlyGoalProgress}% batida
+                </span>
+              </div>
+              <p className="text-xs font-bold text-[var(--muted)]">{monthLabel(selectedMonth)}</p>
+            </div>
+            <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end">
+              <div className="min-w-0 flex-1">
+                <p className="text-3xl font-black leading-tight sm:text-4xl">{formatCurrency(metrics.closed)}</p>
+                <p className="mt-1 text-sm font-extrabold text-[var(--muted)]">
+                  de {formatCurrency(monthlyRevenueGoal)} no mês
+                </p>
+                <p className="mt-2 text-xs font-semibold text-[var(--muted)]">
+                  {monthlyGoalGap > 0 ? `Faltam ${formatCurrency(monthlyGoalGap)} para bater a meta.` : `Passou ${formatCurrency(Math.abs(monthlyGoalGap))} da meta.`}
+                </p>
+              </div>
+              <div className="w-full max-w-[260px]">
+                <MoneyInput
+                  label="Definir meta do mês"
+                  value={monthlyRevenueGoal}
+                  onChange={onUpdateMonthlyRevenueGoal}
+                />
+              </div>
+            </div>
+            <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#0f766e]/12">
+              <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e,#34d399,#a4f4cf)]" style={{ width: `${monthlyGoalProgress}%` }} />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-[var(--muted)]">
+              <span className="rounded-full bg-white/62 px-3 py-1.5 dark:bg-white/8">Fechado: <strong className="text-[var(--foreground)]">{formatCurrency(metrics.closed)}</strong></span>
+              <span className="rounded-full bg-white/62 px-3 py-1.5 dark:bg-white/8">{monthlyGoalGap > 0 ? "Falta" : "Passou"}: <strong className="text-[var(--foreground)]">{formatCurrency(Math.abs(monthlyGoalGap))}</strong></span>
+            </div>
+          </section>
+
+          <section className="border-t border-[#0f766e]/12 pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-[#a4f4cf]">Meta anual</p>
+                <p className="mt-2 text-3xl font-black leading-none">{goalProgress}%</p>
+                <p className="mt-2 text-xs font-bold text-[var(--muted)]">{formatCurrency(metrics.yearClosed)} faturados</p>
+              </div>
+              <BusinessBrandSymbol className="h-10 w-10 shrink-0 opacity-80" />
+            </div>
+            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#0f766e]/10">
+              <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e,#34d399,#a4f4cf)]" style={{ width: `${goalProgress}%` }} />
+            </div>
+            <div className="mt-4 space-y-2 text-xs font-bold">
+              <p className="flex items-center justify-between gap-3"><span className="text-[var(--muted)]">Restante</span><strong>{formatCurrency(metrics.goalRemaining)}</strong></p>
+              <p className="flex items-center justify-between gap-3"><span className="text-[var(--muted)]">Por mês</span><strong>{formatCurrency(metrics.monthlyGoalRequired)}</strong></p>
+              <p className="flex items-center justify-between gap-3"><span className="text-[var(--muted)]">Meta</span><strong>{formatCurrency(business.settings.annualRevenueGoal)}</strong></p>
+            </div>
+          </section>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+        <div className="grid gap-3 md:grid-cols-2">
+          <BusinessMetricCard label="Valor fechado" value={formatCurrency(metrics.closed)} helper={`${metrics.sales.length} venda(s) no mês`} icon={BadgeDollarSign} />
+          <BusinessMetricCard label="Valor recebido" value={formatCurrency(metrics.received)} helper="Entrou de fato na conta" icon={Wallet} tone="blue" />
+          <BusinessMetricCard label="Taxas" value={formatCurrency(metrics.fees)} helper="Cartão de crédito no mês" icon={CreditCard} tone="amber" />
+          <BusinessMetricCard label="Em aberto" value={formatCurrency(metrics.open)} helper="Boletos e saldos a receber" icon={CircleAlert} tone="dark" />
+        </div>
+        <Card className="relative overflow-hidden border-emerald-700/18 bg-[linear-gradient(145deg,rgba(240,253,250,.9),rgba(255,255,255,.62))] p-5">
+          <span className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/16 blur-3xl" />
+          <p className="relative text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Guardar dinheiro</p>
+          <h3 className="relative mt-2 text-3xl font-black">{formatCurrency(metrics.saved)}</h3>
+          <div className="relative mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="rounded-2xl border border-emerald-700/12 bg-white/52 p-3 dark:bg-white/6">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--muted)]">Reserva</p>
+              <p className="mt-1 text-lg font-black">{formatCurrency(metrics.reserveSaved)}</p>
+            </div>
+            <div className="rounded-2xl border border-blue-700/12 bg-white/52 p-3 dark:bg-white/6">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--muted)]">Investimentos</p>
+              <p className="mt-1 text-lg font-black">{formatCurrency(metrics.invested)}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onOpenInvestments} className="relative mt-4 w-full rounded-2xl bg-[#0f766e] px-4 py-3 text-xs font-extrabold text-white">Registrar valor guardado</button>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Pró-labore</p>
+              <h3 className="mt-2 text-xl font-black">{formatCurrency(metrics.proLabore)}</h3>
+              <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+                {proLaboreGap > 0 ? `Faltam ${formatCurrency(proLaboreGap)} para a meta` : `Passou ${formatCurrency(Math.abs(proLaboreGap))} da meta`}
+              </p>
+            </div>
+            <button type="button" onClick={onOpenPayroll} className="rounded-2xl bg-[#0f766e] px-4 py-2.5 text-xs font-extrabold text-white">Ver folha</button>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Lucro do mês</p>
+              <h3 className={`mt-2 text-xl font-black ${metrics.profit >= 0 ? "text-emerald-700 dark:text-[#a4f4cf]" : "text-red-600 dark:text-red-300"}`}>{formatCurrency(metrics.profit)}</h3>
+              <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Após saídas, salários, bônus, taxas e dinheiro guardado.</p>
+            </div>
+            <button type="button" onClick={onOpenBalance} className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold">Balanço</button>
+          </div>
+        </Card>
+      </div>
+      <BusinessAnnualCalendar
+        business={business}
+        selectedMonth={selectedMonth}
+        setSelectedMonth={setSelectedMonth}
+        onReceiveInstallment={onReceiveBusinessInstallment}
+        onReceiveSaleBalance={onReceiveBusinessSaleBalance}
+        onPayExpense={onPayBusinessExpense}
+      />
+    </div>
+  );
+}
+
+function BusinessSalesView({
+  business,
+  selectedMonth,
+  onOpenSale,
+  onReceiveInstallment,
+}: {
+  business: BusinessState;
+  selectedMonth: string;
+  onOpenSale: (sale: BusinessSale) => void;
+  onReceiveInstallment: (saleId: number, installmentId: number, receivedDate?: string) => void;
+}) {
+  const metrics = buildBusinessMetrics(business, selectedMonth);
+  const saleRows = [
+    ...metrics.sales.map((sale) => ({ kind: "sale" as const, sale })),
+    ...metrics.installmentSales
+      .filter(({ sale }) => monthKey(sale.closedDate) !== selectedMonth)
+      .map(({ sale, installment }) => ({ kind: "installment" as const, sale, installment })),
+  ];
+  const rows = [
+    { label: "Valor fechado", value: metrics.closed, helper: "Vendas do mês" },
+    { label: "Valor recebido", value: metrics.received, helper: "Entrou na conta" },
+    { label: "Taxas", value: metrics.fees, helper: "Cartão de crédito" },
+    { label: "Em aberto", value: metrics.open, helper: "Boletos e saldos futuros" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        {rows.map((item) => (
+          <Card key={item.label} className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">{item.label}</p>
+            <p className="mt-2 text-xl font-black">{formatCurrency(item.value)}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{item.helper}</p>
+          </Card>
+        ))}
+      </div>
+      <Card className="p-5">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Extrato de vendas</p>
+            <h3 className="mt-2 text-lg font-extrabold">Clientes e serviços fechados</h3>
+          </div>
+          <p className="text-sm font-black text-emerald-700 dark:text-emerald-200">{saleRows.length} registro(s)</p>
+        </div>
+        <div className="divide-y divide-[#211d19]/8 dark:divide-white/10">
+          {saleRows.map((row) => {
+            if (row.kind === "installment") {
+              const openAmount = Math.max(0, row.installment.amount - (row.installment.received ? row.installment.receivedAmount ?? row.installment.amount : 0));
+              return (
+                <button type="button" key={`${row.sale.id}-${row.installment.id}`} onClick={() => onOpenSale(row.sale)} className="grid w-full gap-3 py-3 text-left lg:grid-cols-[1fr_1fr_130px_130px_120px] lg:items-center">
+                  <div>
+                    <p className="text-sm font-extrabold">{row.sale.clientName}</p>
+                    <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{row.sale.service} • Parcela</p>
+                  </div>
+                  <Field label="Pagamento" value="Boleto" />
+                  <Field label="Parcela" value={formatCurrency(row.installment.amount)} />
+                  <Field label="Recebido" value={formatCurrency(row.installment.received ? row.installment.receivedAmount ?? row.installment.amount : 0)} />
+                  <Field label={openAmount > 0 ? "Aberto" : "Status"} value={openAmount > 0 ? formatCurrency(openAmount) : "Recebida"} />
+                </button>
+              );
+            }
+            const sale = row.sale;
+            return (
+              <button type="button" key={sale.id} onClick={() => onOpenSale(sale)} className="grid w-full gap-3 py-3 text-left lg:grid-cols-[1fr_1fr_130px_130px_120px] lg:items-center">
+                <div>
+                  <p className="text-sm font-extrabold">{sale.clientName}</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{sale.service}</p>
+                </div>
+                <Field label="Pagamento" value={sale.paymentMethod} />
+                <Field label="Fechado" value={formatCurrency(sale.closedAmount)} />
+                <Field label="Recebido" value={formatCurrency(saleReceivedTotal(sale))} />
+                <Field label="Aberto" value={formatCurrency(saleOpenTotal(sale))} />
+              </button>
+            );
+          })}
+          {!saleRows.length ? <p className="py-8 text-center text-sm font-semibold text-[var(--muted)]">Nenhuma venda ou parcela lançada neste mês.</p> : null}
+        </div>
+      </Card>
+      {metrics.receivables.length ? (
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">A receber no mês</p>
+          <div className="mt-3 divide-y divide-[#211d19]/8 dark:divide-white/10">
+            {metrics.receivables.map(({ sale, installment }) => (
+              <div key={`${sale.id}-${installment.id}`} className="grid gap-3 py-3 sm:grid-cols-[1fr_110px_120px_110px] sm:items-center">
+                <button type="button" onClick={() => onOpenSale(sale)} className="min-w-0 text-left">
+                  <p className="text-sm font-extrabold">{sale.clientName}</p>
+                  <p className="text-xs font-semibold text-[var(--muted)]">{sale.service}</p>
+                </button>
+                <Field label="Vence" value={formatDate(installment.dueDate)} />
+                <Field label="Valor" value={formatCurrency(installment.amount)} />
+                <button
+                  type="button"
+                  onClick={() => onReceiveInstallment(sale.id, installment.id)}
+                  className="rounded-2xl bg-[#0f766e] px-4 py-2.5 text-xs font-extrabold text-white"
+                >
+                  Receber
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function BusinessPayrollView({ business, selectedMonth, onOpenPayroll }: { business: BusinessState; selectedMonth: string; onOpenPayroll: (payroll: BusinessPayroll) => void }) {
+  const metrics = buildBusinessMetrics(business, selectedMonth);
+  const gap = business.settings.monthlyProLaboreGoal - metrics.proLabore;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <BusinessMetricCard label="Pró-labore pago" value={formatCurrency(metrics.proLabore)} helper="Salários do mês" icon={Users} />
+        <BusinessMetricCard label="Meta mensal" value={formatCurrency(business.settings.monthlyProLaboreGoal)} helper={gap > 0 ? `Falta ${formatCurrency(gap)}` : `Passou ${formatCurrency(Math.abs(gap))}`} icon={Target} tone="blue" />
+        <BusinessMetricCard label="Bônus pago" value={formatCurrency(metrics.bonus)} helper="Valores extras do mês" icon={Gift} tone="amber" />
+      </div>
+      <Card className="p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Registros</p>
+        <div className="mt-4 divide-y divide-[#211d19]/8 dark:divide-white/10">
+          {metrics.payroll.map((item) => (
+            <button key={item.id} type="button" onClick={() => onOpenPayroll(item)} className="grid w-full gap-3 py-3 text-left sm:grid-cols-[1fr_120px_130px] sm:items-center">
+              <div>
+                <p className="text-sm font-extrabold">{item.personName}</p>
+                <p className="text-xs font-semibold text-[var(--muted)]">{item.type}</p>
+              </div>
+              <Field label="Data" value={formatDate(item.paidDate)} />
+              <Field label="Valor" value={formatCurrency(item.amount)} />
+            </button>
+          ))}
+          {!metrics.payroll.length ? <p className="py-8 text-center text-sm font-semibold text-[var(--muted)]">Nenhum pró-labore ou bônus lançado neste mês.</p> : null}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function BusinessInvestmentsView({ business, selectedMonth, onOpenInvestment }: { business: BusinessState; selectedMonth: string; onOpenInvestment: (investment: BusinessInvestment) => void }) {
+  const metrics = buildBusinessMetrics(business, selectedMonth);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <BusinessMetricCard label="Total guardado" value={formatCurrency(metrics.saved)} helper="Reserva + investimentos" icon={PiggyBank} />
+        <BusinessMetricCard label="Reserva" value={formatCurrency(metrics.reserveSaved)} helper="Segurança da operação" icon={Shield} tone="blue" />
+        <BusinessMetricCard label="Investimentos" value={formatCurrency(metrics.invested)} helper="Dinheiro aplicado no mês" icon={TrendingUp} tone="amber" />
+      </div>
+      <Card className="p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Registros</p>
+        <div className="mt-4 divide-y divide-[#211d19]/8 dark:divide-white/10">
+          {metrics.investments.map((item) => (
+            <button key={item.id} type="button" onClick={() => onOpenInvestment(item)} className="grid w-full gap-3 py-3 text-left sm:grid-cols-[1fr_120px_130px] sm:items-center">
+              <div>
+                <p className="text-sm font-extrabold">{item.name}</p>
+                <p className="text-xs font-semibold text-[var(--muted)]">{item.type}</p>
+              </div>
+              <Field label="Data" value={formatDate(item.date)} />
+              <Field label="Valor" value={formatCurrency(item.amount)} />
+            </button>
+          ))}
+          {!metrics.investments.length ? <p className="py-8 text-center text-sm font-semibold text-[var(--muted)]">Nenhum valor guardado neste mês.</p> : null}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function BusinessBalanceView({ business, selectedMonth }: { business: BusinessState; selectedMonth: string }) {
+  const months = buildMonthRange(`${selectedMonth.slice(0, 4)}-01`, `${selectedMonth.slice(0, 4)}-12`);
+  const monthly = months.map((month) => ({ month, metrics: buildBusinessMetrics(business, month) }));
+  const yearMetrics = monthly.reduce(
+    (total, item) => ({
+      received: total.received + item.metrics.received,
+      expensesPaid: total.expensesPaid + item.metrics.expensesPaid,
+      proLabore: total.proLabore + item.metrics.proLabore,
+      bonus: total.bonus + item.metrics.bonus,
+      fees: total.fees + item.metrics.fees,
+      saved: total.saved + item.metrics.saved,
+      profit: total.profit + item.metrics.profit,
+    }),
+    { received: 0, expensesPaid: 0, proLabore: 0, bonus: 0, fees: 0, saved: 0, profit: 0 },
+  );
+  const maxMonthly = Math.max(1, ...monthly.map((item) => Math.max(item.metrics.received, item.metrics.expensesPaid + item.metrics.proLabore + item.metrics.bonus + item.metrics.fees + item.metrics.saved)));
+  const categoryTotals = business.categories
+    .map((category) => {
+      const total = sum(
+        business.expenses.filter(
+          (bill) =>
+            bill.status === "paga" &&
+            bill.paidDate?.slice(0, 4) === selectedMonth.slice(0, 4) &&
+            normalizeCategoryName(bill.category) === normalizeCategoryName(category.name),
+        ),
+        (bill) => bill.paidAmount ?? bill.expectedAmount,
+      );
+      return { ...category, total };
+    })
+    .filter((category) => category.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const maxCategory = Math.max(1, ...categoryTotals.map((category) => category.total));
+  const taxTotal = categoryTotals.find((category) => normalizeCategoryName(category.name) === "impostos")?.total ?? 0;
+  const softwareTotal = categoryTotals.find((category) => normalizeCategoryName(category.name) === "softwares")?.total ?? 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <BusinessMetricCard label="Recebido no ano" value={formatCurrency(yearMetrics.received)} helper="Valores que entraram na conta" icon={Wallet} />
+        <BusinessMetricCard label="Saídas pagas" value={formatCurrency(yearMetrics.expensesPaid)} helper="Despesas operacionais" icon={ReceiptText} tone="blue" />
+        <BusinessMetricCard label="Lucro no ano" value={formatCurrency(yearMetrics.profit)} helper="Após custos, taxas e valores guardados" icon={TrendingUp} />
+        <BusinessMetricCard label="Impostos" value={formatCurrency(taxTotal)} helper="Pago no ano pela categoria" icon={BadgeDollarSign} tone="amber" />
+        <BusinessMetricCard label="Guardado" value={formatCurrency(yearMetrics.saved)} helper={`Softwares: ${formatCurrency(softwareTotal)}`} icon={PiggyBank} tone="dark" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Evolução mensal</p>
+              <h3 className="mt-2 text-lg font-extrabold">Recebido x custo total</h3>
+            </div>
+            <p className="text-xs font-bold text-[var(--muted)]">Custo inclui saídas, pró-labore, bônus, taxas e dinheiro guardado.</p>
+          </div>
+          <div className="mt-5 space-y-3">
+            {monthly.map(({ month, metrics }) => {
+              const outflow = metrics.expensesPaid + metrics.proLabore + metrics.bonus + metrics.fees + metrics.saved;
+              return (
+                <div key={month} className="grid gap-2 sm:grid-cols-[92px_1fr_110px] sm:items-center">
+                  <p className="text-xs font-black">{monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}</p>
+                  <div className="space-y-1.5">
+                    <div className="h-2.5 overflow-hidden rounded-full bg-[#0f766e]/10">
+                      <div className="h-full rounded-full bg-[#0f766e]" style={{ width: `${Math.max(2, (metrics.received / maxMonthly) * 100)}%` }} />
+                    </div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-emerald-700/10">
+                      <div className="h-full rounded-full bg-emerald-300" style={{ width: `${Math.max(2, (outflow / maxMonthly) * 100)}%` }} />
+                    </div>
+                  </div>
+                  <p className={`text-xs font-black ${metrics.profit >= 0 ? "text-emerald-700 dark:text-emerald-200" : "text-red-600"}`}>{formatCurrency(metrics.profit)}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-4 text-[11px] font-bold text-[var(--muted)]">
+            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#0f766e]" />Recebido</span>
+            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />Custo total</span>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Categorias do ano</p>
+          <h3 className="mt-2 text-lg font-extrabold">Onde a empresa gastou</h3>
+          <div className="mt-5 space-y-4">
+            {categoryTotals.map((category) => {
+              const Icon = iconMap[category.icon as keyof typeof iconMap] ?? Folder;
+              return (
+                <div key={category.id}>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-2xl" style={{ background: `${category.color}18`, color: category.color }}>
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="truncate text-sm font-extrabold">{category.name}</span>
+                    </span>
+                    <span className="text-sm font-black">{formatCurrency(category.total)}</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-[#211d19]/7 dark:bg-white/10">
+                    <div className="h-full rounded-full" style={{ width: `${Math.max(4, (category.total / maxCategory) * 100)}%`, background: category.color }} />
+                  </div>
+                </div>
+              );
+            })}
+            {!categoryTotals.length ? <p className="rounded-2xl border border-[var(--line)] p-4 text-sm font-semibold text-[var(--muted)]">Nenhuma saída paga no ano ainda.</p> : null}
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Tabela executiva</p>
+        <div className="mt-4 overflow-x-auto">
+          <div className="min-w-[860px] overflow-hidden rounded-2xl border border-[var(--line)]">
+            <div className="grid grid-cols-[120px_repeat(7,1fr)] bg-[#0f766e] px-3 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-white">
+              {["Mês", "Entrou", "Saiu", "Salários", "Guardado", "Taxas", "Ticket", "Lucro"].map((label) => <span key={label}>{label}</span>)}
+            </div>
+            {monthly.map(({ month, metrics }) => (
+              <div key={month} className="grid grid-cols-[120px_repeat(7,1fr)] border-t border-[var(--line)] px-3 py-3 text-xs font-bold">
+                <span className="font-black">{monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}</span>
+                <span>{formatCurrency(metrics.received)}</span>
+                <span>{formatCurrency(metrics.expensesPaid)}</span>
+                <span>{formatCurrency(metrics.proLabore)}</span>
+                <span>{formatCurrency(metrics.saved)}</span>
+                <span>{formatCurrency(metrics.fees)}</span>
+                <span>{formatCurrency(metrics.averageTicket)}</span>
+                <span className={metrics.profit >= 0 ? "text-emerald-700 dark:text-emerald-200" : "text-red-600"}>{formatCurrency(metrics.profit)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function DebtsView({
+  debts,
+  onNewDebt,
+  onOpenDebt,
+  onPayDebt,
+}: {
+  debts: NameCleanupDebt[];
+  onNewDebt: () => void;
+  onOpenDebt: (debt: NameCleanupDebt) => void;
+  onPayDebt: (id: number) => void;
+}) {
+  const openDebts = debts
+    .filter((debt) => debt.status === "aberta")
+    .sort((a, b) => a.currentAmount - b.currentAmount);
+  const paidDebts = debts
+    .filter((debt) => debt.status === "paga")
+    .sort((a, b) => String(b.paidAt ?? "").localeCompare(String(a.paidAt ?? "")));
+  const totalOpen = sum(openDebts, (debt) => debt.currentAmount);
+  const totalPaid = sum(paidDebts, (debt) => debt.paidAmount ?? debt.currentAmount);
+  const totalOriginal = sum(debts, (debt) => debt.originalAmount);
+
+  const summaryItems = [
+    { label: "Aberto agora", value: formatCurrency(totalOpen), helper: `${openDebts.length} dívida(s) para negociar`, icon: CircleAlert, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
+    { label: "Já limpo", value: formatCurrency(totalPaid), helper: `${paidDebts.length} dívida(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-[#0f766e]/16 text-[#0f766e]" },
+    { label: "Valor original", value: formatCurrency(totalOriginal), helper: "Base antes de atualização/juros", icon: BadgeDollarSign, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        {summaryItems.map(({ icon: Icon, ...item }) => (
+          <div
+            key={item.label}
+            className="relative min-h-[138px] overflow-hidden rounded-[26px] border bg-[linear-gradient(145deg,rgba(255,255,255,.86),rgba(247,244,240,.62))] p-4 text-[#211d19] backdrop-blur-2xl dark:bg-white/6 dark:text-white"
+            style={{
+              borderColor: `${item.accent}55`,
+              boxShadow: `0 8px 22px rgba(33,29,25,.035), 0 0 0 1px ${item.accent}14`,
+            }}
+          >
+            <span className={`relative flex h-9 w-9 items-center justify-center rounded-2xl ${item.soft}`}>
+              <Icon className="h-4 w-4" />
+            </span>
+            <p className="relative mt-4 text-[9px] font-black uppercase tracking-[0.14em] text-[#756b62] dark:text-white/58">{item.label}</p>
+            <p className="relative mt-2 text-xl font-black leading-tight text-[#211d19] dark:text-white">{item.value}</p>
+            <p className="relative mt-1 text-[11px] font-bold leading-4 text-[#756b62] dark:text-white/58">{item.helper}</p>
+          </div>
+        ))}
+      </div>
+
+      <Card className="p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#d75c27]">Limpeza do nome</p>
+            <h3 className="mt-1 text-lg font-extrabold">Pague primeiro as menores dívidas.</h3>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Ordem automática da mais barata para a mais cara pelo valor atualizado.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onNewDebt}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d75c27] px-4 py-2.5 text-xs font-extrabold text-white"
+          >
+            <Plus className="h-4 w-4" />
+            Nova dívida
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {openDebts.map((debt, index) => (
+            <div
+              key={debt.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenDebt(debt)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") onOpenDebt(debt);
+              }}
+              className="grid cursor-pointer gap-4 rounded-[24px] border border-[var(--line)] bg-white/62 p-4 transition hover:bg-white dark:bg-white/6 xl:grid-cols-[minmax(260px,1fr)_0.7fr_0.7fr_auto] xl:items-center"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#d75c27]/10 text-xs font-black text-[#d75c27]">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-extrabold">{debt.name}</h3>
+                  <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{debt.origin}</p>
+                </div>
+              </div>
+              <Field label="Valor real" value={formatCurrency(debt.originalAmount)} />
+              <Field label="Atualizado" value={formatCurrency(debt.currentAmount)} />
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPayDebt(debt.id);
+                }}
+                className="rounded-2xl bg-[#211d19] px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27]"
+              >
+                Paguei
+              </button>
+            </div>
+          ))}
+          {!openDebts.length ? (
+            <div className="rounded-[24px] border border-[var(--line)] bg-white/45 p-8 text-center dark:bg-white/6">
+              <p className="text-sm font-extrabold">Nenhuma dívida aberta.</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Quando cadastrar, elas aparecem aqui em ordem de prioridade.</p>
+            </div>
+          ) : null}
+        </div>
+      </Card>
+
+      {paidDebts.length ? (
+        <Card className="p-5">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2f9f73]">Dívidas pagas</p>
+          <div className="mt-4 divide-y divide-[#211d19]/8 dark:divide-white/10">
+            {paidDebts.map((debt) => (
+              <button
+                type="button"
+                key={debt.id}
+                onClick={() => onOpenDebt(debt)}
+                className="grid w-full gap-3 py-3 text-left sm:grid-cols-[1fr_150px_150px] sm:items-center"
+              >
+                <span>
+                  <span className="block text-sm font-extrabold">{debt.name}</span>
+                  <span className="block text-xs font-semibold text-[var(--muted)]">{debt.origin}</span>
+                </span>
+                <span className="text-xs font-bold text-[var(--muted)]">{debt.paidAt ? formatDate(debt.paidAt) : "Pago"}</span>
+                <span className="text-sm font-black text-emerald-600">{formatCurrency(debt.paidAmount ?? debt.currentAmount)}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }
@@ -3759,6 +5120,83 @@ function MoneyInput({
   );
 }
 
+function DebtModal({
+  debt,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  debt?: NameCleanupDebt;
+  onClose: () => void;
+  onSave: (debt: NameCleanupDebt) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [draft, setDraft] = useState<NameCleanupDebt>(
+    debt ?? {
+      id: Date.now(),
+      name: "",
+      origin: "",
+      originalAmount: 0,
+      currentAmount: 0,
+      status: "aberta",
+      createdAt: getTodayKey(),
+      notes: "",
+    },
+  );
+
+  const update = (patch: Partial<NameCleanupDebt>) => setDraft((current) => ({ ...current, ...patch }));
+
+  return (
+    <Modal title={debt ? "Editar dívida" : "Nova dívida"} onClose={onClose}>
+      <div className="grid gap-4">
+        <TextInput label="Nome da dívida" value={draft.name} onChange={(name) => update({ name })} />
+        <TextInput label="Origem da conta" value={draft.origin} onChange={(origin) => update({ origin })} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <MoneyInput label="Valor real" value={draft.originalAmount} onChange={(originalAmount) => update({ originalAmount })} />
+          <MoneyInput label="Valor atualizado" value={draft.currentAmount} onChange={(currentAmount) => update({ currentAmount })} />
+        </div>
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Observação</span>
+          <textarea
+            value={draft.notes ?? ""}
+            onChange={(event) => update({ notes: event.target.value })}
+            className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
+          />
+        </label>
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-between">
+          {debt ? (
+            <button
+              type="button"
+              onClick={() => {
+                onDelete(debt.id);
+                onClose();
+              }}
+              className="rounded-2xl border border-red-500/20 px-5 py-3 text-xs font-extrabold text-red-600"
+            >
+              Excluir
+            </button>
+          ) : <span />}
+          <button
+            type="button"
+            onClick={() => {
+              onSave({
+                ...draft,
+                name: draft.name.trim() || "Dívida sem nome",
+                origin: draft.origin.trim() || "Origem não informada",
+                currentAmount: draft.currentAmount || draft.originalAmount,
+              });
+              onClose();
+            }}
+            className="rounded-2xl bg-[#d75c27] px-5 py-3 text-xs font-extrabold text-white"
+          >
+            Salvar dívida
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function AccountLogoInput({
   logoUrl,
   category,
@@ -3809,6 +5247,21 @@ function BrandSymbol({ className = "" }: { className?: string }) {
       alt=""
       className={`object-contain ${className}`}
     />
+  );
+}
+
+function BusinessBrandSymbol({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 80.36 75.45"
+      aria-hidden="true"
+      className={className}
+    >
+      <path fill="#a4f4cf" d="M73.42,5.18l-28.93,21.86-4.85,3.82c-.8.63-1.42,1.4-1.92,2.28l-2.22,3.83c-1.59,2.77-3.14,5.46-5,8.07l-7.32,10.29-4.47,6.23-8.71,12.32,8.67-6.47,13.03-9.87c3.19-2.41,6.39-4.57,9.76-6.72l7.98,8.91,6.77.03v-18.4l-2.24,3.15c-1.84,2.57-4.79,3.63-8.04,3.24,1.78-1,3.39-1.98,4.82-3.44l8.76-13.16,13.71-20.49,7.15-10.67-6.94,5.18ZM48.78,39.17c-.67,2.51-3.29,4.07-5.85,3.2-2.41-.83-3.6-3.32-2.94-5.64.66-2.31,3.03-3.75,5.46-3.18,2.51.59,3.99,3.2,3.33,5.62Z" />
+      <path fill="#a4f4cf" d="M57.24,5.83l-4.8,3.96c-4.82-2.52-10.12-3.8-15.55-3.6-11.34.41-21.6,6.47-27.13,16.45-5.17,9.29-5.52,19.52-1.02,29.09l-3.83,4.47c-2.07-3.71-3.49-7.6-4.3-11.72C-1.88,30.98,3.45,17.7,13.95,9.04,22.15,2.28,32.96-.66,43.48.81c4.89.72,9.49,2.32,13.76,5.01Z" />
+      <path fill="#a4f4cf" d="M74.87,41.32c-.76,8.8-4.64,17.08-10.85,23.35-6.49,6.55-15.27,10.46-24.51,10.76-5.3.18-10.47-.79-15.36-2.93l4.85-4.17c3.69,1.25,7.37,1.68,11.19,1.47,11.36-.63,21.26-7.87,25.97-18.12,2.18-4.67,3.21-9.75,2.99-14.89-.16-3.2-.76-6.22-1.77-9.22l4.05-5.33c2.9,6.04,3.96,12.5,3.44,19.08Z" />
+      <path fill="#a4f4cf" d="M36.71,30.2c-.76.85-1.36,1.75-1.94,2.72l-3.4,5.75-5.21-5.88v13.87s-8.83,12.95-8.83,12.95V19.08h8.83s10.55,11.13,10.55,11.13Z" />
+    </svg>
   );
 }
 
@@ -4766,7 +6219,7 @@ function LoginScreen({
               </p>
             ) : null}
             {authMessage ? (
-              <p className="mt-4 rounded-2xl border border-emerald-500/15 bg-emerald-500/8 px-4 py-3 text-xs font-bold text-emerald-700">
+              <p className="mt-4 rounded-2xl border border-emerald-500/15 bg-emerald-500/8 px-4 py-3 text-xs font-bold text-[#0f766e]">
                 {authMessage}
               </p>
             ) : null}
@@ -5310,6 +6763,362 @@ function PaymentModal({
   );
 }
 
+function BusinessSaleModal({
+  sale,
+  selectedMonth,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  sale?: BusinessSale;
+  selectedMonth: string;
+  onClose: () => void;
+  onSave: (sale: BusinessSale) => void;
+  onDelete?: (id: number) => void;
+}) {
+  const buildInstallments = (count: number, total: number, startDate: string) => {
+    const startMonth = monthKey(startDate);
+    const dueDay = startDate.slice(8, 10) || "10";
+    return Array.from({ length: count }, (_, index) => ({
+      id: Date.now() + index,
+      dueDate: `${addMonths(startMonth, index)}-${dueDay}`,
+      amount: Math.round((total / count) * 100) / 100,
+      received: false,
+    }));
+  };
+  const [draft, setDraft] = useState<BusinessSale>(
+    sale ?? {
+      id: Date.now(),
+      clientName: "",
+      service: "",
+      closedAmount: 0,
+      receivedAmount: 0,
+      receivedDate: `${selectedMonth}-01`,
+      closedDate: `${selectedMonth}-01`,
+      paymentMethod: "Pix",
+      cardFee: 0,
+      installments: [],
+      notes: "",
+    },
+  );
+  const installmentCount = Math.max(1, draft.installments.length || 1);
+  const update = (patch: Partial<BusinessSale>) => setDraft((current) => ({ ...current, ...patch }));
+  const switchMethod = (paymentMethod: BusinessPaymentMethod) => {
+    setDraft((current) => ({
+      ...current,
+      paymentMethod,
+      receivedAmount: paymentMethod === "Boleto" ? 0 : current.receivedAmount || current.closedAmount,
+      receivedDate: paymentMethod === "Boleto" ? undefined : current.receivedDate ?? current.closedDate,
+      cardFee: paymentMethod === "Cartão de crédito" ? current.cardFee : 0,
+      installments: paymentMethod === "Boleto" ? buildInstallments(current.installments.length || 2, current.closedAmount, current.closedDate) : [],
+    }));
+  };
+
+  return (
+    <Modal title={sale ? "Editar venda" : "Nova venda"} onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput label="Nome do cliente" value={draft.clientName} onChange={(clientName) => update({ clientName })} />
+        <TextInput label="Serviço fechado" value={draft.service} onChange={(service) => update({ service })} />
+        <MoneyInput
+          label="Valor fechado"
+          value={draft.closedAmount}
+          onChange={(closedAmount) =>
+            setDraft((current) => ({
+              ...current,
+              closedAmount,
+              receivedAmount: current.paymentMethod === "Pix" ? closedAmount : current.receivedAmount,
+              receivedDate: current.paymentMethod === "Pix" ? current.receivedDate ?? current.closedDate : current.receivedDate,
+              installments: current.paymentMethod === "Boleto" ? buildInstallments(current.installments.length || 2, closedAmount, current.closedDate) : current.installments,
+            }))
+          }
+        />
+        <MoneyInput label="Valor recebido" value={draft.receivedAmount} onChange={(receivedAmount) => update({ receivedAmount })} />
+        <TextInput
+          label="Data do fechamento"
+          type="date"
+          value={draft.closedDate}
+          onChange={(closedDate) =>
+            setDraft((current) => ({
+              ...current,
+              closedDate,
+              receivedDate: current.paymentMethod !== "Boleto" ? current.receivedDate ?? closedDate : undefined,
+              installments: current.paymentMethod === "Boleto" ? buildInstallments(current.installments.length || 2, current.closedAmount, closedDate) : current.installments,
+            }))
+          }
+        />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Forma de pagamento</span>
+          <select
+            value={draft.paymentMethod}
+            onChange={(event) => switchMethod(event.target.value as BusinessPaymentMethod)}
+            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#0f766e] dark:bg-white/8"
+          >
+            {(["Pix", "Boleto", "Cartão de crédito"] as const).map((method) => <option key={method}>{method}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {draft.paymentMethod !== "Boleto" && draft.receivedAmount > 0 ? (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <TextInput
+            label="Data que entrou na conta"
+            type="date"
+            value={draft.receivedDate ?? draft.closedDate}
+            onChange={(receivedDate) => update({ receivedDate })}
+          />
+          <div className="rounded-2xl border border-emerald-700/14 bg-emerald-700/6 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Mês do recebimento</p>
+            <p className="mt-2 text-lg font-black">{monthLabel(monthKey(draft.receivedDate ?? draft.closedDate))}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">É este mês que vai somar em Valor recebido.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {draft.paymentMethod === "Cartão de crédito" ? (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <MoneyInput label="Taxa do cartão" value={draft.cardFee} onChange={(cardFee) => update({ cardFee })} />
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-200">Diferença</p>
+            <p className="mt-2 text-lg font-black">{formatCurrency(Math.max(0, draft.closedAmount - draft.receivedAmount))}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Use para conferir a taxa contra o valor que caiu na conta.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {draft.paymentMethod === "Boleto" ? (
+        <div className="mt-4 rounded-3xl border border-[var(--line)] bg-white/35 p-4 dark:bg-white/5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Parcelas do boleto</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Até 4 datas e valores para entrar nos meses certos.</p>
+            </div>
+            <select
+              value={installmentCount}
+              onChange={(event) => update({ installments: buildInstallments(Number(event.target.value), draft.closedAmount, draft.closedDate) })}
+              className="rounded-2xl border border-[var(--line)] bg-white/60 px-3 py-2 text-xs font-extrabold outline-none dark:bg-white/8"
+            >
+              {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count} parcela{count > 1 ? "s" : ""}</option>)}
+            </select>
+          </div>
+          <div className="mt-4 space-y-3">
+            {draft.installments.map((installment, index) => (
+              <div key={installment.id} className="rounded-2xl border border-[var(--line)] bg-white/58 p-3 dark:bg-white/5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="rounded-full bg-[#0f766e]/10 px-3 py-1 text-[11px] font-black text-[#0f766e] dark:text-[#a4f4cf]">
+                    {index + 1}ª parcela
+                  </p>
+                  <label className="flex shrink-0 items-center gap-2 rounded-full border border-[var(--line)] bg-white/70 px-3 py-1.5 dark:bg-white/6">
+                    <span className="text-[11px] font-extrabold text-[var(--muted)]">Recebida</span>
+                    <Toggle
+                      checked={installment.received}
+                      onChange={(received) => update({ installments: draft.installments.map((item) => item.id === installment.id ? { ...item, received, receivedDate: received ? item.receivedDate ?? item.dueDate : undefined, receivedAmount: received ? item.receivedAmount ?? item.amount : undefined } : item) })}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <TextInput
+                    label="Data prevista"
+                    type="date"
+                    value={installment.dueDate}
+                    onChange={(dueDate) => update({ installments: draft.installments.map((item) => item.id === installment.id ? { ...item, dueDate } : item) })}
+                  />
+                  <MoneyInput
+                    label="Valor da parcela"
+                    value={installment.amount}
+                    onChange={(amount) => update({ installments: draft.installments.map((item) => item.id === installment.id ? { ...item, amount } : item) })}
+                  />
+                  <MoneyInput
+                    label="Valor recebido"
+                    value={installment.received ? installment.receivedAmount ?? installment.amount : 0}
+                    onChange={(receivedAmount) => update({ installments: draft.installments.map((item) => item.id === installment.id ? { ...item, receivedAmount, received: receivedAmount > 0, receivedDate: receivedAmount > 0 ? item.receivedDate ?? getReferenceDate(monthKey(item.dueDate)) : undefined } : item) })}
+                  />
+                </div>
+                {installment.received ? (
+                  <TextInput
+                    label="Data recebida"
+                    type="date"
+                    value={installment.receivedDate ?? installment.dueDate}
+                    onChange={(receivedDate) => update({ installments: draft.installments.map((item) => item.id === installment.id ? { ...item, receivedDate } : item) })}
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <label className="mt-4 block">
+        <span className="text-xs font-bold text-[var(--muted)]">Observações</span>
+        <textarea
+          value={draft.notes ?? ""}
+          onChange={(event) => update({ notes: event.target.value })}
+          className="mt-2 min-h-20 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#0f766e] dark:bg-white/8"
+        />
+      </label>
+
+      <div className="mt-5 flex flex-wrap justify-between gap-3">
+        {sale && onDelete ? (
+          <button type="button" onClick={() => { onDelete(sale.id); onClose(); }} className="rounded-2xl border border-red-500/20 px-5 py-2.5 text-xs font-extrabold text-red-600">Excluir</button>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={() => {
+            const cleanSale = {
+              ...draft,
+              clientName: draft.clientName.trim() || "Cliente sem nome",
+              service: draft.service.trim() || "Serviço fechado",
+              receivedAmount: draft.paymentMethod === "Boleto" ? 0 : draft.receivedAmount,
+              receivedDate: draft.paymentMethod === "Boleto" || draft.receivedAmount <= 0 ? undefined : draft.receivedDate ?? draft.closedDate,
+              installments: draft.installments.map((installment) => ({
+                ...installment,
+                amount: Math.round(installment.amount * 100) / 100,
+                receivedAmount: installment.receivedAmount !== undefined ? Math.round(installment.receivedAmount * 100) / 100 : undefined,
+              })),
+            };
+            onSave(cleanSale);
+            onClose();
+          }}
+          className="rounded-2xl bg-[#0f766e] px-5 py-2.5 text-xs font-extrabold text-white"
+        >
+          Salvar venda
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function BusinessPayrollModal({
+  payroll,
+  selectedMonth,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  payroll?: BusinessPayroll;
+  selectedMonth: string;
+  onClose: () => void;
+  onSave: (payroll: BusinessPayroll) => void;
+  onDelete?: (id: number) => void;
+}) {
+  const [draft, setDraft] = useState<BusinessPayroll>(
+    payroll ?? {
+      id: Date.now(),
+      personName: "",
+      type: "Pró-labore",
+      amount: 0,
+      paidDate: `${selectedMonth}-01`,
+      notes: "",
+    },
+  );
+  const update = (patch: Partial<BusinessPayroll>) => setDraft((current) => ({ ...current, ...patch }));
+
+  return (
+    <Modal title={payroll ? "Editar pagamento" : "Novo pró-labore"} onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput label="Pessoa" value={draft.personName} onChange={(personName) => update({ personName })} />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Tipo</span>
+          <select
+            value={draft.type}
+            onChange={(event) => update({ type: event.target.value as BusinessPayroll["type"] })}
+            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#0f766e] dark:bg-white/8"
+          >
+            <option>Pró-labore</option>
+            <option>Bônus</option>
+          </select>
+        </label>
+        <MoneyInput label="Valor" value={draft.amount} onChange={(amount) => update({ amount })} />
+        <TextInput label="Data de pagamento" type="date" value={draft.paidDate} onChange={(paidDate) => update({ paidDate })} />
+      </div>
+      <label className="mt-4 block">
+        <span className="text-xs font-bold text-[var(--muted)]">Observações</span>
+        <textarea value={draft.notes ?? ""} onChange={(event) => update({ notes: event.target.value })} className="mt-2 min-h-20 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#0f766e] dark:bg-white/8" />
+      </label>
+      <div className="mt-5 flex flex-wrap justify-between gap-3">
+        {payroll && onDelete ? (
+          <button type="button" onClick={() => { onDelete(payroll.id); onClose(); }} className="rounded-2xl border border-red-500/20 px-5 py-2.5 text-xs font-extrabold text-red-600">Excluir</button>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={() => {
+            onSave({ ...draft, personName: draft.personName.trim() || "Pessoa" });
+            onClose();
+          }}
+          className="rounded-2xl bg-[#0f766e] px-5 py-2.5 text-xs font-extrabold text-white"
+        >
+          Salvar pagamento
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function BusinessInvestmentModal({
+  investment,
+  selectedMonth,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  investment?: BusinessInvestment;
+  selectedMonth: string;
+  onClose: () => void;
+  onSave: (investment: BusinessInvestment) => void;
+  onDelete?: (id: number) => void;
+}) {
+  const [draft, setDraft] = useState<BusinessInvestment>(
+    investment ?? {
+      id: Date.now(),
+      name: "Reserva da empresa",
+      type: "Reserva",
+      amount: 0,
+      date: `${selectedMonth}-01`,
+      notes: "",
+    },
+  );
+  const update = (patch: Partial<BusinessInvestment>) => setDraft((current) => ({ ...current, ...patch }));
+
+  return (
+    <Modal title={investment ? "Editar valor guardado" : "Guardar dinheiro"} onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput label="Nome" value={draft.name} onChange={(name) => update({ name })} />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Tipo</span>
+          <select
+            value={draft.type}
+            onChange={(event) => update({ type: event.target.value as BusinessInvestment["type"] })}
+            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#0f766e] dark:bg-white/8"
+          >
+            <option>Reserva</option>
+            <option>Investimento</option>
+          </select>
+        </label>
+        <MoneyInput label="Valor guardado" value={draft.amount} onChange={(amount) => update({ amount })} />
+        <TextInput label="Data" type="date" value={draft.date} onChange={(date) => update({ date })} />
+      </div>
+      <label className="mt-4 block">
+        <span className="text-xs font-bold text-[var(--muted)]">Observações</span>
+        <textarea value={draft.notes ?? ""} onChange={(event) => update({ notes: event.target.value })} className="mt-2 min-h-20 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#0f766e] dark:bg-white/8" />
+      </label>
+      <div className="mt-5 flex flex-wrap justify-between gap-3">
+        {investment && onDelete ? (
+          <button type="button" onClick={() => { onDelete(investment.id); onClose(); }} className="rounded-2xl border border-red-500/20 px-5 py-2.5 text-xs font-extrabold text-red-600">Excluir</button>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={() => {
+            onSave({ ...draft, name: draft.name.trim() || "Valor guardado" });
+            onClose();
+          }}
+          className="rounded-2xl bg-[#0f766e] px-5 py-2.5 text-xs font-extrabold text-white"
+        >
+          Salvar
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function IncomeDetailModal({
   income,
   categories,
@@ -5417,7 +7226,7 @@ function ReserveTransactionModal({
         <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d75c27]">Saldo guardado</p>
         <p className="mt-2 text-3xl font-black">{formatCurrency(goal.current)}</p>
         <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-[#d75c27]" style={{ width: `${Math.min(progress, 100)}%` }} />
+          <div className="h-full rounded-full bg-gradient-to-r from-[#0f766e] to-[#a4f4cf]" style={{ width: `${Math.min(progress, 100)}%` }} />
         </div>
         <p className="mt-2 text-xs font-bold text-[var(--muted)]">Meta: {formatCurrency(goal.target)}</p>
       </div>
@@ -5425,7 +7234,7 @@ function ReserveTransactionModal({
         <button
           type="button"
           onClick={() => setMode("deposito")}
-          className={`rounded-2xl border px-4 py-3 text-xs font-extrabold ${mode === "deposito" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" : "border-[var(--line)]"}`}
+          className={`rounded-2xl border px-4 py-3 text-xs font-extrabold ${mode === "deposito" ? "border-emerald-500/30 bg-[#0f766e]/16 text-[#0f766e]" : "border-[var(--line)]"}`}
         >
           Depositar
         </button>
@@ -5732,7 +7541,7 @@ function ProfileModal({
         </div>
 
         {saved ? (
-          <p className="mt-6 rounded-2xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-700">
+          <p className="mt-6 rounded-2xl bg-[#0f766e]/16 p-3 text-xs font-bold text-[#0f766e]">
             Perfil salvo com sucesso.
           </p>
         ) : null}
@@ -6222,6 +8031,9 @@ function NorthIADrawer({
 function SettingsView({
   categories,
   setCategories,
+  isBusinessMode = false,
+  businessSettings,
+  setBusinessSettings,
   section,
   setSection,
   preferences,
@@ -6247,6 +8059,9 @@ function SettingsView({
 }: {
   categories: Category[];
   setCategories: Dispatch<SetStateAction<Category[]>>;
+  isBusinessMode?: boolean;
+  businessSettings?: BusinessSettings;
+  setBusinessSettings?: Dispatch<SetStateAction<BusinessState>>;
   section: string | null;
   setSection: (section: string | null) => void;
   preferences: FinancePreferences;
@@ -6286,6 +8101,7 @@ function SettingsView({
 
   const titleMap: Record<string, string> = {
     perfil: "Perfil",
+    empresa: "Metas da empresa",
     categorias: "Categorias",
     regras: "Regras do planejamento",
     notificacoes: "Notificações",
@@ -6294,6 +8110,7 @@ function SettingsView({
   };
   const descriptions: Record<string, string> = {
     perfil: "Edite foto, nome e informações da sua conta.",
+    empresa: "Configure faturamento anual, meta mensal e pró-labore.",
     categorias: "Organize categorias de contas, entradas e metas.",
     regras: "Configure as porcentagens que guiam o planejamento.",
     notificacoes: "Alertas de vencimento, metas e atrasos.",
@@ -6302,6 +8119,7 @@ function SettingsView({
   };
   const settingsItems = [
     ["perfil", UserRound],
+    ...(isBusinessMode ? [["empresa", Building2] as const] : []),
     ["categorias", ReceiptText],
     ["regras", LineChart],
     ["notificacoes", Bell],
@@ -6358,6 +8176,46 @@ function SettingsView({
             >
               Abrir perfil
             </button>
+          </Card>
+        ) : null}
+
+        {selectedSection === "empresa" && businessSettings && setBusinessSettings ? (
+          <Card className="p-5">
+            <div className="grid gap-4 md:grid-cols-3">
+              <MoneyInput
+                label="Meta anual de faturamento"
+                value={businessSettings.annualRevenueGoal}
+                onChange={(annualRevenueGoal) =>
+                  setBusinessSettings((current) => ({
+                    ...current,
+                    settings: { ...current.settings, annualRevenueGoal },
+                  }))
+                }
+              />
+              <MoneyInput
+                label="Meta mensal de faturamento"
+                value={businessSettings.monthlyRevenueGoal}
+                onChange={(monthlyRevenueGoal) =>
+                  setBusinessSettings((current) => ({
+                    ...current,
+                    settings: { ...current.settings, monthlyRevenueGoal },
+                  }))
+                }
+              />
+              <MoneyInput
+                label="Meta mensal de pró-labore"
+                value={businessSettings.monthlyProLaboreGoal}
+                onChange={(monthlyProLaboreGoal) =>
+                  setBusinessSettings((current) => ({
+                    ...current,
+                    settings: { ...current.settings, monthlyProLaboreGoal },
+                  }))
+                }
+              />
+            </div>
+            <p className="mt-4 text-xs font-semibold leading-5 text-[var(--muted)]">
+              A meta anual alimenta o cálculo de quanto falta faturar no ano e quanto precisa por mês até dezembro.
+            </p>
           </Card>
         ) : null}
 
@@ -6665,7 +8523,7 @@ function RulesSettings({
             A soma atual é {total}%. Ajuste para 100%.
           </p>
         ) : (
-          <p className="mt-4 rounded-2xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-700">
+          <p className="mt-4 rounded-2xl bg-[#0f766e]/16 p-3 text-xs font-bold text-[#0f766e]">
             Regra válida: 100%.
           </p>
         )}
@@ -7125,12 +8983,19 @@ function DataPanel({
 function PlanningView({
   metrics,
   rules,
+  planning,
+  onSavePlanning,
 }: {
   metrics: ReturnType<typeof buildMetrics>;
   rules: CalculatorRules;
+  planning?: PlanningState;
+  onSavePlanning: (planning: PlanningState) => void;
 }) {
-  const initialPlannedIncome = metrics.totalIncome || 6290;
-  const [plannedIncome, setPlannedIncome] = useState(initialPlannedIncome);
+  const initialPlanning = useMemo(
+    () => planning ?? buildDefaultPlanningState(metrics, rules),
+    [metrics, planning, rules],
+  );
+  const [plannedIncome, setPlannedIncome] = useState(initialPlanning.plannedIncome);
   const [saved, setSaved] = useState(false);
   const [incomeEditing, setIncomeEditing] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
@@ -7145,48 +9010,25 @@ function PlanningView({
     icon: "Wallet",
     tone: "neutral",
   });
-  const [style, setStyle] = useState<"equilibrado" | "conservador" | "agressivo">("equilibrado");
+  const [style, setStyle] = useState<"equilibrado" | "conservador" | "agressivo">(initialPlanning.style);
   const stylePresets = {
     conservador: { Essenciais: 60, Lazer: 10, Metas: 30 },
     equilibrado: { Essenciais: 50, Lazer: 20, Metas: 30 },
     agressivo: { Essenciais: 45, Lazer: 10, Metas: 45 },
   };
-  const [distribution, setDistribution] = useState<Array<{
-    id: string;
-    label: string;
-    helper: string;
-    value: number;
-    icon: React.ElementType;
-    tone: string;
-  }>>(() => {
-    const billsBudget = initialPlannedIncome * (rules.bills / 100);
-    const personalBudget = initialPlannedIncome * (rules.personal / 100);
-    const goalsBudget = initialPlannedIncome * (rules.goals / 100);
-    const reserveBudget = initialPlannedIncome * (rules.reserve / 100);
-    const overdueBudget = Math.min(metrics.totalOverdue, billsBudget * 0.3);
-    const remainingBillsBudget = Math.max(0, billsBudget - overdueBudget);
-    return [
-      { id: "essenciais", label: "Essenciais", helper: "Contas fixas e moradia", value: Math.round(remainingBillsBudget * 0.62), icon: Home, tone: "orange" },
-      { id: "alimentacao", label: "Alimentação", helper: "Mercado, restaurantes", value: Math.round(remainingBillsBudget * 0.22), icon: ShoppingCart, tone: "green" },
-      { id: "transporte", label: "Transporte", helper: "Combustível, apps, manutenção", value: Math.round(remainingBillsBudget * 0.16), icon: Car, tone: "blue" },
-      { id: "lazer", label: "Lazer", helper: "Diversão, hobbies, passeios", value: Math.round(personalBudget), icon: Heart, tone: "red" },
-      { id: "reserva", label: "Reserva", helper: "Reserva de emergência", value: Math.round(reserveBudget), icon: Shield, tone: "green" },
-      { id: "metas", label: "Metas", helper: "Sonhos e objetivos", value: Math.round(goalsBudget), icon: Target, tone: "purple" },
-      { id: "atrasadas", label: "Contas atrasadas", helper: "Dívidas e pendências", value: Math.round(overdueBudget), icon: Zap, tone: "red" },
-    ];
-  });
-  const [monthGoals, setMonthGoals] = useState([
-    { id: 1, title: "Guardar na reserva", helper: "Ter mais segurança financeira.", amount: 500, done: true },
-    { id: 2, title: "Quitar Energia", helper: "Evitar juros e pendências.", amount: 210, done: true },
-    { id: 3, title: "Comprar óculos", helper: "Melhorar minha qualidade de vida.", amount: 450, done: false },
-    { id: 4, title: "Trocar celular", helper: "Planejado para o segundo semestre.", amount: 1800, done: false },
-  ]);
-  const [expectedExpenses, setExpectedExpenses] = useState([
-    { id: 1, title: "Festa Junina Davi", amount: 250 },
-    { id: 2, title: "Presente aniversário", amount: 120 },
-    { id: 3, title: "Manutenção do carro", amount: 300 },
-    { id: 4, title: "Mercado extra", amount: 200 },
-  ]);
+  const [distribution, setDistribution] = useState<PlanningDistributionItem[]>(initialPlanning.distribution);
+  const [monthGoals, setMonthGoals] = useState<PlanningMonthGoal[]>(initialPlanning.monthGoals);
+  const [expectedExpenses, setExpectedExpenses] = useState<PlanningExpectedExpense[]>(initialPlanning.expectedExpenses);
+
+  useEffect(() => {
+    onSavePlanning({
+      plannedIncome,
+      style,
+      distribution,
+      monthGoals,
+      expectedExpenses,
+    });
+  }, [distribution, expectedExpenses, monthGoals, plannedIncome, style]);
   const totalDistribution = sum(distribution, (item) => item.value);
   const totalGoals = sum(monthGoals.filter((goal) => goal.done), (goal) => goal.amount);
   const totalExpected = sum(expectedExpenses, (expense) => expense.amount);
@@ -7239,7 +9081,6 @@ function PlanningView({
     setExpectedExpenses((current) => [...current, { id: Date.now(), title: "Nova despesa prevista", amount: 0 }]);
   };
   const addDistributionCategory = () => {
-    const Icon = iconMap[categoryDraft.icon as keyof typeof iconMap] ?? Wallet;
     setDistribution((current) => [
       ...current,
       {
@@ -7247,7 +9088,7 @@ function PlanningView({
         label: categoryDraft.label || "Nova área",
         helper: categoryDraft.helper || "Valor planejado para o mês",
         value: Math.max(0, categoryDraft.value),
-        icon: Icon,
+        icon: categoryDraft.icon,
         tone: categoryDraft.tone,
       },
     ]);
@@ -7377,7 +9218,7 @@ function PlanningView({
               <span />
             </div>
             {distribution.map((item) => {
-              const Icon = item.icon as React.ElementType;
+              const Icon = iconMap[item.icon as keyof typeof iconMap] ?? Wallet;
               const percent = plannedIncome > 0 ? Math.round((item.value / plannedIncome) * 100) : 0;
               return (
                 <div key={item.id} className="grid gap-3 rounded-2xl bg-white/42 p-3 dark:bg-white/6 md:grid-cols-[1fr_132px_72px_1fr] md:items-center">
@@ -7611,7 +9452,7 @@ function PlanningView({
               </div>
             ))}
           </div>
-          <div className={`mt-6 flex items-center justify-between rounded-2xl p-4 text-lg font-black ${remaining >= 0 ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"}`}>
+          <div className={`mt-6 flex items-center justify-between rounded-2xl p-4 text-lg font-black ${remaining >= 0 ? "bg-[#0f766e]/16 text-emerald-600" : "bg-red-500/10 text-red-600"}`}>
             <span>Saldo livre planejado</span>
             <span>{formatCurrency(remaining)}</span>
           </div>
@@ -7671,7 +9512,7 @@ function PlanningView({
       </div>
 
       {saved ? (
-        <p className="rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-700">
+        <p className="rounded-2xl border border-emerald-500/15 bg-[#0f766e]/16 p-4 text-sm font-bold text-[#0f766e]">
           Plano salvo. Você pode revisar e ajustar seu planejamento quantas vezes quiser durante o mês.
         </p>
       ) : null}
@@ -7681,7 +9522,20 @@ function PlanningView({
 
 function ActiveView({
   active,
+  setActive,
+  workspaceMode,
   data,
+  business,
+  setBusiness,
+  selectedMonth,
+  setSelectedMonth,
+  onReceiveBusinessInstallment,
+  onReceiveBusinessSaleBalance,
+  onPayBusinessExpense,
+  onUpdateBusinessMonthlyRevenueGoal,
+  onOpenBusinessSale,
+  onOpenBusinessPayroll,
+  onOpenBusinessInvestment,
   metrics,
   onStartPayment,
   onOpenBill,
@@ -7715,16 +9569,35 @@ function ActiveView({
   onOpenIncome,
   onOpenGoal,
   onNewGoal,
+  debts,
+  onNewDebt,
+  onOpenDebt,
+  onPayDebt,
   onToggleObjective,
   onRemoveObjective,
   onNewObjective,
+  planning,
+  onSavePlanning,
   allIncomes,
   allBills,
   allGoals,
   user,
 }: {
   active: string;
+  setActive: (value: string) => void;
+  workspaceMode: WorkspaceMode;
   data: MonthData;
+  business: BusinessState;
+  setBusiness: Dispatch<SetStateAction<BusinessState>>;
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+  onReceiveBusinessInstallment: (saleId: number, installmentId: number, receivedDate?: string) => void;
+  onReceiveBusinessSaleBalance: (saleId: number, receivedDate?: string) => void;
+  onPayBusinessExpense: (billId: number, paidDate?: string) => void;
+  onUpdateBusinessMonthlyRevenueGoal: (value: number) => void;
+  onOpenBusinessSale: (sale: BusinessSale) => void;
+  onOpenBusinessPayroll: (payroll: BusinessPayroll) => void;
+  onOpenBusinessInvestment: (investment: BusinessInvestment) => void;
   metrics: ReturnType<typeof buildMetrics>;
   onStartPayment: (bill: Bill) => void;
   onOpenBill: (bill: Bill) => void;
@@ -7758,14 +9631,70 @@ function ActiveView({
   onOpenIncome: (income: Income) => void;
   onOpenGoal: (goal: Goal) => void;
   onNewGoal: () => void;
+  debts: NameCleanupDebt[];
+  onNewDebt: () => void;
+  onOpenDebt: (debt: NameCleanupDebt) => void;
+  onPayDebt: (id: number) => void;
   onToggleObjective: (id: number) => void;
   onRemoveObjective: (id: number) => void;
   onNewObjective: () => void;
+  planning?: PlanningState;
+  onSavePlanning: (planning: PlanningState) => void;
   allIncomes: Income[];
   allBills: Bill[];
   allGoals: Goal[];
   user: UserProfile;
 }) {
+  if (workspaceMode === "business") {
+    if (active === "Dashboard") {
+      return (
+        <BusinessDashboard
+          business={business}
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          onReceiveBusinessInstallment={onReceiveBusinessInstallment}
+          onReceiveBusinessSaleBalance={onReceiveBusinessSaleBalance}
+          onPayBusinessExpense={onPayBusinessExpense}
+          onUpdateMonthlyRevenueGoal={onUpdateBusinessMonthlyRevenueGoal}
+          onOpenPayroll={() => setActive("Pró-labore")}
+          onOpenInvestments={() => setActive("Investimentos")}
+          onOpenBalance={() => setActive("Balanço")}
+        />
+      );
+    }
+    if (active === "Vendas") {
+      return (
+        <BusinessSalesView
+          business={business}
+          selectedMonth={selectedMonth}
+          onOpenSale={onOpenBusinessSale}
+          onReceiveInstallment={onReceiveBusinessInstallment}
+        />
+      );
+    }
+    if (active === "Saídas") {
+      return (
+        <BillsView
+          bills={buildVisibleBills(business.expenses, selectedMonth)}
+          onStartPayment={onStartPayment}
+          onOpenBill={onOpenBill}
+          onDeleteBills={onDeleteBills}
+          onDuplicateBills={onDuplicateBills}
+          categories={business.categories}
+        />
+      );
+    }
+    if (active === "Pró-labore") {
+      return <BusinessPayrollView business={business} selectedMonth={selectedMonth} onOpenPayroll={onOpenBusinessPayroll} />;
+    }
+    if (active === "Investimentos") {
+      return <BusinessInvestmentsView business={business} selectedMonth={selectedMonth} onOpenInvestment={onOpenBusinessInvestment} />;
+    }
+    if (active === "Balanço") {
+      return <BusinessBalanceView business={business} selectedMonth={selectedMonth} />;
+    }
+  }
+
   if (active === "Dashboard") {
     return (
       <Dashboard
@@ -7797,6 +9726,16 @@ function ActiveView({
       />
     );
   }
+  if (active === "Dívidas") {
+    return (
+      <DebtsView
+        debts={debts}
+        onNewDebt={onNewDebt}
+        onOpenDebt={onOpenDebt}
+        onPayDebt={onPayDebt}
+      />
+    );
+  }
   if (active === "Metas") {
     return <GoalsView goals={data.goals} onOpenGoal={onOpenGoal} onNewGoal={onNewGoal} />;
   }
@@ -7811,7 +9750,7 @@ function ActiveView({
     );
   }
   if (active === "Planejamento") {
-    return <PlanningView metrics={metrics} rules={rules} />;
+    return <PlanningView metrics={metrics} rules={rules} planning={planning} onSavePlanning={onSavePlanning} />;
   }
   if (active === "Relatórios") {
     return (
@@ -7831,8 +9770,11 @@ function ActiveView({
   if (active === "Configurações") {
     return (
       <SettingsView
-        categories={categories}
+        categories={workspaceMode === "business" ? business.categories : categories}
         setCategories={setCategories}
+        isBusinessMode={workspaceMode === "business"}
+        businessSettings={workspaceMode === "business" ? business.settings : undefined}
+        setBusinessSettings={workspaceMode === "business" ? ((setBusiness as Dispatch<SetStateAction<BusinessState>>)) : undefined}
         section={settingsSection}
         setSection={setSettingsSection}
         preferences={preferences}
@@ -7851,7 +9793,7 @@ function ActiveView({
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         allIncomes={allIncomes}
-        allBills={allBills}
+        allBills={workspaceMode === "business" ? business.expenses : allBills}
         allGoals={allGoals}
         realBalance={realBalance}
         user={user}
@@ -7872,10 +9814,40 @@ const viewCopy: Record<string, { eyebrow: string; title: string; description: st
     title: "Entradas registradas",
     description: "Recebimentos do mês filtrado.",
   },
+  Vendas: {
+    eyebrow: "Fluxo da empresa",
+    title: "Vendas registradas",
+    description: "Clientes, serviços, valores recebidos, taxas e boletos em aberto.",
+  },
   Contas: {
     eyebrow: "Compromissos",
     title: "Contas do mês",
     description: "Filtre, acompanhe e marque pagamentos.",
+  },
+  Saídas: {
+    eyebrow: "Compromissos PJ",
+    title: "Saídas da empresa",
+    description: "Despesas, comprovantes, pagamentos e categorias da empresa.",
+  },
+  "Pró-labore": {
+    eyebrow: "Folha",
+    title: "Pró-labore e bônus",
+    description: "Registre salários, colaboradores e bônus pagos no mês.",
+  },
+  Investimentos: {
+    eyebrow: "Reserva PJ",
+    title: "Investimentos e dinheiro guardado",
+    description: "Registre reservas e aplicações feitas pela empresa.",
+  },
+  Balanço: {
+    eyebrow: "Balanço",
+    title: "Balanço mensal",
+    description: "Resumo mês a mês de entradas, saídas, salários, taxas, ticket médio e lucro.",
+  },
+  Dívidas: {
+    eyebrow: "Limpeza do nome",
+    title: "Dívidas",
+    description: "Organize negociações, valores atualizados e contas já quitadas.",
   },
   Metas: {
     eyebrow: "Construção",
@@ -7915,6 +9887,7 @@ export default function ReveeNorthApp() {
       : false,
   );
   const [active, setActive] = useState("Dashboard");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("personal");
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -7931,12 +9904,18 @@ export default function ReveeNorthApp() {
     }
   });
   const [bills, setBills] = useState<Bill[]>([]);
+  const [debts, setDebts] = useState<NameCleanupDebt[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [objectives, setObjectives] = useState<MonthlyObjective[]>([]);
+  const [planning, setPlanning] = useState<PlanningState | undefined>(undefined);
   const [categories, setCategories] = useState(initialCategories);
+  const [business, setBusiness] = useState<BusinessState>(() => defaultBusinessState());
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
+  const [selectedBusinessSale, setSelectedBusinessSale] = useState<BusinessSale | null>(null);
+  const [selectedBusinessPayroll, setSelectedBusinessPayroll] = useState<BusinessPayroll | null>(null);
+  const [selectedBusinessInvestment, setSelectedBusinessInvestment] = useState<BusinessInvestment | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [reserveGoal, setReserveGoal] = useState<Goal | null>(null);
   const [financeDetail, setFinanceDetail] = useState<FinanceDetail | null>(null);
@@ -7945,7 +9924,12 @@ export default function ReveeNorthApp() {
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [realBalanceModalOpen, setRealBalanceModalOpen] = useState(false);
   const [incomeModalOpen, setIncomeModalOpen] = useState(false);
+  const [businessSaleModalOpen, setBusinessSaleModalOpen] = useState(false);
+  const [businessPayrollModalOpen, setBusinessPayrollModalOpen] = useState(false);
+  const [businessInvestmentModalOpen, setBusinessInvestmentModalOpen] = useState(false);
   const [billCreateModalOpen, setBillCreateModalOpen] = useState(false);
+  const [debtModalOpen, setDebtModalOpen] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<NameCleanupDebt | null>(null);
   const [goalCreateModalOpen, setGoalCreateModalOpen] = useState(false);
   const [objectiveModalOpen, setObjectiveModalOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
@@ -8027,10 +10011,14 @@ export default function ReveeNorthApp() {
     if (safeState.bills) {
       setBills((current) => preserveBillLogos(cleanupStuckFootballBillsOnce(safeState.bills!), current));
     }
+    if (safeState.debts) setDebts(safeState.debts);
     if (safeState.incomes) setIncomes(safeState.incomes);
     if (safeState.goals) setGoals(safeState.goals);
     if (safeState.objectives) setObjectives(safeState.objectives);
+    if (safeState.planning) setPlanning(safeState.planning);
     if (safeState.categories) setCategories(safeState.categories);
+    if (safeState.workspaceMode) setWorkspaceMode(safeState.workspaceMode);
+    if (safeState.business) setBusiness(sanitizeBusinessState(safeState.business));
     if (safeState.preferences) setPreferences(safeState.preferences);
     if (safeState.rules) setRules(safeState.rules);
     if (safeState.notifications) setNotifications(safeState.notifications);
@@ -8042,18 +10030,22 @@ export default function ReveeNorthApp() {
   };
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("reveenorth:user");
-    const savedBalance = localStorage.getItem("reveenorth:real-balance");
-    const savedCategories = localStorage.getItem("reveenorth:categories");
-    const savedState = localStorage.getItem("reveenorth:app-state");
-    const savedOnboarding = localStorage.getItem("reveenorth:onboarding-complete");
-    const savedLoggedIn = localStorage.getItem("reveenorth:logged-in");
-    if (savedState) applyCloudState(JSON.parse(savedState) as ReveeNorthCloudState);
-    if (savedUser) setUser(JSON.parse(savedUser) as UserProfile);
-    if (savedBalance) setRealBalance(JSON.parse(savedBalance) as RealBalance);
-    if (savedCategories) setCategories(JSON.parse(savedCategories) as Category[]);
-    if (savedOnboarding === "true") setOnboardingComplete(true);
-    if (savedLoggedIn === "true") setLoggedIn(true);
+    try {
+      const savedUser = localStorage.getItem("reveenorth:user");
+      const savedBalance = localStorage.getItem("reveenorth:real-balance");
+      const savedCategories = localStorage.getItem("reveenorth:categories");
+      const savedState = localStorage.getItem("reveenorth:app-state");
+      const savedOnboarding = localStorage.getItem("reveenorth:onboarding-complete");
+      const savedLoggedIn = localStorage.getItem("reveenorth:logged-in");
+      if (savedState) applyCloudState(JSON.parse(savedState) as ReveeNorthCloudState);
+      if (savedUser) setUser(JSON.parse(savedUser) as UserProfile);
+      if (savedBalance) setRealBalance(JSON.parse(savedBalance) as RealBalance);
+      if (savedCategories) setCategories(JSON.parse(savedCategories) as Category[]);
+      if (savedOnboarding === "true") setOnboardingComplete(true);
+      if (savedLoggedIn === "true") setLoggedIn(true);
+    } catch {
+      localStorage.removeItem("reveenorth:app-state");
+    }
   }, []);
 
   useEffect(() => {
@@ -8076,6 +10068,8 @@ export default function ReveeNorthApp() {
         if (!mounted) return;
         setAuthSession(session);
         setLoggedIn(true);
+        setAuthReady(true);
+        setCloudReady(true);
 
         try {
           const cloudState = await loadCloudState<ReveeNorthCloudState>(session);
@@ -8116,6 +10110,14 @@ export default function ReveeNorthApp() {
   }, [categories]);
 
   useEffect(() => {
+    if (!cloudReady || typeof window === "undefined") return;
+    const seedKey = "reveenorth:business-examples-seeded-2026-08-30-v2";
+    if (localStorage.getItem(seedKey) === "true") return;
+    setBusiness((current) => mergeBusinessExamples(current));
+    localStorage.setItem(seedKey, "true");
+  }, [cloudReady]);
+
+  useEffect(() => {
     localStorage.setItem("reveenorth:account-created-at", accountCreatedAt);
     const options = buildMonthOptions(accountCreatedAt);
     if (!options.some((option) => option.value === selectedMonth)) {
@@ -8139,10 +10141,14 @@ export default function ReveeNorthApp() {
     user,
     realBalance,
     bills,
+    debts,
     incomes,
     goals,
     objectives,
+    planning,
     categories,
+    workspaceMode,
+    business,
     preferences,
     rules,
     notifications,
@@ -8153,13 +10159,17 @@ export default function ReveeNorthApp() {
     accountCreatedAt,
     bills,
     categories,
+    workspaceMode,
+    business,
     darkMode,
+    debts,
     goals,
     incomes,
     lastSavedAt,
     notifications,
     objectives,
     onboardingComplete,
+    planning,
     preferences,
     realBalance,
     rules,
@@ -8216,7 +10226,7 @@ export default function ReveeNorthApp() {
   const nextMonthAdvice = metrics.overdueBills.length
     ? "Para melhorar o próximo mês: quite as contas atrasadas primeiro e evite direcionar dinheiro para metas antes de resolver pendências."
     : "Para melhorar o próximo mês: mantenha o registro das entradas, proteja uma parte para o futuro e revise seus gastos flexíveis antes de novas compras.";
-  const copy = viewCopy[active];
+  const copy = viewCopy[active] ?? viewCopy.Dashboard;
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) return "Bom dia";
@@ -8232,12 +10242,34 @@ export default function ReveeNorthApp() {
     }, 3000);
   };
 
-  const handlePayBill = (id: number) => {
+  const handlePayBill = (id: number, paidDateOverride?: string) => {
+    if (workspaceMode === "business") {
+      const paidDate = paidDateOverride ?? getTodayKey();
+      setBusiness((current) => {
+        const nextBusiness = {
+          ...current,
+          expenses: current.expenses.map((bill) =>
+            bill.id === id && bill.status !== "paga"
+              ? {
+                  ...bill,
+                  status: "paga" as BillStatus,
+                  paidDate,
+                  paidAmount: bill.expectedAmount,
+                }
+              : bill,
+          ),
+        };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      showFeedback("Saída paga.", "A despesa da empresa foi atualizada.");
+      return;
+    }
     setBills((current) => {
       const nextBills = current.map((bill) =>
         bill.id === id && bill.status !== "paga"
           ? (() => {
-              const paidDate = getTodayKey();
+              const paidDate = paidDateOverride ?? getTodayKey();
               const lateDays = Math.max(0, daysBetween(bill.dueDate, paidDate));
               return {
               ...bill,
@@ -8264,6 +10296,28 @@ export default function ReveeNorthApp() {
     paidDate: string,
     note: string,
   ) => {
+    if (workspaceMode === "business") {
+      setBusiness((current) => {
+        const nextBusiness = {
+          ...current,
+          expenses: current.expenses.map((bill) =>
+            bill.id === id
+              ? {
+                  ...bill,
+                  status: "paga" as BillStatus,
+                  paidDate,
+                  paidAmount,
+                  notes: note ? `${bill.notes}${bill.notes ? " • " : ""}${note}` : bill.notes,
+                }
+              : bill,
+          ),
+        };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      showFeedback("Saída paga.", "A despesa da empresa foi atualizada.");
+      return;
+    }
     setBills((current) => {
       const nextBills = current.map((bill) =>
         bill.id === id
@@ -8291,6 +10345,20 @@ export default function ReveeNorthApp() {
   };
 
   const handleSaveBill = (updatedBill: Bill) => {
+    if (workspaceMode === "business") {
+      setBusiness((current) => {
+        const exists = current.expenses.some((bill) => bill.id === updatedBill.id);
+        const nextBusiness = {
+          ...current,
+          expenses: exists
+            ? current.expenses.map((bill) => (bill.id === updatedBill.id ? normalizeBillStatus(updatedBill) : bill))
+            : [normalizeBillStatus(updatedBill), ...current.expenses],
+        };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      return;
+    }
     setBills((current) => {
       const recurrenceId = updatedBill.recurrenceId ?? String(updatedBill.id);
       const shouldStopRecurrence =
@@ -8351,6 +10419,14 @@ export default function ReveeNorthApp() {
   };
 
   const handleDeleteBill = (id: number) => {
+    if (workspaceMode === "business") {
+      setBusiness((current) => {
+        const nextBusiness = { ...current, expenses: current.expenses.filter((bill) => bill.id !== id) };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      return;
+    }
     setBills((current) => {
       const nextBills = removeBillsAndFutureRepeats(current, [id], accountCreatedAt);
       persistCloudPatchNow({ bills: nextBills });
@@ -8360,6 +10436,15 @@ export default function ReveeNorthApp() {
 
   const handleDeleteBills = (ids: number[]) => {
     if (!ids.length) return;
+    if (workspaceMode === "business") {
+      setBusiness((current) => {
+        const nextBusiness = { ...current, expenses: current.expenses.filter((bill) => !ids.includes(bill.id)) };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      showFeedback("Saídas excluídas.", `${ids.length} despesa(s) removida(s).`);
+      return;
+    }
     setBills((current) => {
       const nextBills = removeBillsAndFutureRepeats(current, ids, accountCreatedAt);
       persistCloudPatchNow({ bills: nextBills });
@@ -8370,6 +10455,26 @@ export default function ReveeNorthApp() {
 
   const handleDuplicateBills = (ids: number[]) => {
     if (!ids.length) return;
+    if (workspaceMode === "business") {
+      setBusiness((current) => {
+        const selected = current.expenses.filter((bill) => ids.includes(bill.id));
+        const now = Date.now();
+        const copies = selected.map((bill, index) => normalizeBillStatus({
+          ...bill,
+          id: now + index,
+          name: `${bill.name} cópia`,
+          status: "pendente",
+          paidDate: undefined,
+          paidAmount: undefined,
+          paidLateDays: undefined,
+        }));
+        const nextBusiness = { ...current, expenses: [...copies, ...current.expenses] };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      showFeedback("Saídas duplicadas.", `${ids.length} despesa(s) copiadas.`);
+      return;
+    }
     setBills((current) => {
       const selected = current.filter((bill) => ids.includes(bill.id));
       const now = Date.now();
@@ -8393,6 +10498,45 @@ export default function ReveeNorthApp() {
     showFeedback("Contas duplicadas.", `${ids.length} conta(s) copiadas com os mesmos dados.`);
   };
 
+  const handleSaveDebt = (debt: NameCleanupDebt) => {
+    setDebts((current) => {
+      const exists = current.some((item) => item.id === debt.id);
+      const nextDebts = exists
+        ? current.map((item) => (item.id === debt.id ? debt : item))
+        : [debt, ...current];
+      persistCloudPatchNow({ debts: nextDebts });
+      return nextDebts;
+    });
+    showFeedback(debt.status === "paga" ? "Dívida atualizada." : "Dívida salva.", "Seu plano de limpeza do nome foi atualizado.");
+  };
+
+  const handlePayDebt = (id: number) => {
+    setDebts((current) => {
+      const nextDebts = current.map((debt) =>
+        debt.id === id
+          ? {
+              ...debt,
+              status: "paga" as const,
+              paidAt: getTodayKey(),
+              paidAmount: debt.currentAmount,
+            }
+          : debt,
+      );
+      persistCloudPatchNow({ debts: nextDebts });
+      return nextDebts;
+    });
+    showFeedback("Dívida marcada como paga.", "Mais um passo na limpeza do seu nome.");
+  };
+
+  const handleDeleteDebt = (id: number) => {
+    setDebts((current) => {
+      const nextDebts = current.filter((debt) => debt.id !== id);
+      persistCloudPatchNow({ debts: nextDebts });
+      return nextDebts;
+    });
+    showFeedback("Dívida removida.", "A lista foi atualizada.");
+  };
+
   const handleCreateIncome = (income: Income) => {
     setIncomes((current) => {
       const nextIncomes = [income, ...current];
@@ -8411,7 +10555,140 @@ export default function ReveeNorthApp() {
     showFeedback("Entrada atualizada.", "As informações foram salvas.");
   };
 
+  const handleSaveBusinessSale = (sale: BusinessSale) => {
+    setBusiness((current) => {
+      const exists = current.sales.some((item) => item.id === sale.id);
+      const nextBusiness = {
+        ...current,
+        sales: exists
+          ? current.sales.map((item) => (item.id === sale.id ? sale : item))
+          : [sale, ...current.sales],
+      };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Venda salva.", "O faturamento da empresa foi atualizado.");
+  };
+
+  const handleDeleteBusinessSale = (id: number) => {
+    setBusiness((current) => {
+      const nextBusiness = { ...current, sales: current.sales.filter((sale) => sale.id !== id) };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Venda removida.", "A lista de vendas foi atualizada.");
+  };
+
+  const handleReceiveBusinessInstallment = (saleId: number, installmentId: number, receivedDateOverride?: string) => {
+    const receivedDate = receivedDateOverride ?? getReferenceDate(selectedMonth);
+    setBusiness((current) => {
+      const nextBusiness = {
+        ...current,
+        sales: current.sales.map((sale) =>
+          sale.id === saleId
+            ? {
+                ...sale,
+                installments: sale.installments.map((installment) =>
+                  installment.id === installmentId
+                    ? { ...installment, received: true, receivedDate, receivedAmount: installment.receivedAmount ?? installment.amount }
+                    : installment,
+                ),
+              }
+            : sale,
+        ),
+      };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Recebimento confirmado.", "O valor entrou como recebido na empresa.");
+  };
+
+  const handleReceiveBusinessSaleBalance = (saleId: number, receivedDateOverride?: string) => {
+    const receivedDate = receivedDateOverride ?? getReferenceDate(selectedMonth);
+    setBusiness((current) => {
+      const nextBusiness = {
+        ...current,
+        sales: current.sales.map((sale) =>
+          sale.id === saleId
+            ? { ...sale, receivedAmount: Math.max(sale.receivedAmount, sale.closedAmount - sale.cardFee), receivedDate }
+            : sale,
+        ),
+      };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Recebimento confirmado.", "O saldo da venda entrou como recebido.");
+  };
+
+  const handleUpdateBusinessMonthlyRevenueGoal = (monthlyRevenueGoal: number) => {
+    setBusiness((current) => {
+      const nextBusiness = { ...current, settings: { ...current.settings, monthlyRevenueGoal } };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+  };
+
+  const handleSaveBusinessPayroll = (payroll: BusinessPayroll) => {
+    setBusiness((current) => {
+      const exists = current.payroll.some((item) => item.id === payroll.id);
+      const nextBusiness = {
+        ...current,
+        payroll: exists
+          ? current.payroll.map((item) => (item.id === payroll.id ? payroll : item))
+          : [payroll, ...current.payroll],
+      };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Pagamento salvo.", "Pró-labore e bônus foram atualizados.");
+  };
+
+  const handleDeleteBusinessPayroll = (id: number) => {
+    setBusiness((current) => {
+      const nextBusiness = { ...current, payroll: current.payroll.filter((item) => item.id !== id) };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Pagamento removido.", "A folha da empresa foi atualizada.");
+  };
+
+  const handleSaveBusinessInvestment = (investment: BusinessInvestment) => {
+    setBusiness((current) => {
+      const exists = (current.investments ?? []).some((item) => item.id === investment.id);
+      const nextBusiness = {
+        ...current,
+        investments: exists
+          ? (current.investments ?? []).map((item) => (item.id === investment.id ? investment : item))
+          : [investment, ...(current.investments ?? [])],
+      };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Valor guardado.", "A reserva/investimento da empresa foi atualizado.");
+  };
+
+  const handleDeleteBusinessInvestment = (id: number) => {
+    setBusiness((current) => {
+      const nextBusiness = { ...current, investments: (current.investments ?? []).filter((item) => item.id !== id) };
+      persistCloudPatchNow({ business: nextBusiness });
+      return nextBusiness;
+    });
+    showFeedback("Registro removido.", "Os investimentos da empresa foram atualizados.");
+  };
+
   const handleCreateBill = (bill: Bill) => {
+    if (workspaceMode === "business") {
+      setBusiness((current) => {
+        const nextBusiness = {
+          ...current,
+          expenses: [normalizeBillStatus(bill), ...current.expenses],
+        };
+        persistCloudPatchNow({ business: nextBusiness });
+        return nextBusiness;
+      });
+      showFeedback("Saída registrada.", "A despesa da empresa entrou no mês.");
+      return;
+    }
     setBills((current) => {
       const nextBills = ensureFixedBillInstances(
         [
@@ -8462,18 +10739,24 @@ export default function ReveeNorthApp() {
 
   const handleToggleObjective = (id: number) => {
     const objective = objectives.find((item) => item.id === id);
-    setObjectives((current) =>
-      current.map((objective) =>
+    setObjectives((current) => {
+      const nextObjectives = current.map((objective) =>
         objective.id === id ? { ...objective, done: !objective.done } : objective,
-      ),
-    );
+      );
+      persistCloudPatchNow({ objectives: nextObjectives });
+      return nextObjectives;
+    });
     if (objective && !objective.done) {
       showFeedback("Boa.", "Mais uma decisão organizada.");
     }
   };
 
   const handleRemoveObjective = (id: number) => {
-    setObjectives((current) => current.filter((objective) => objective.id !== id));
+    setObjectives((current) => {
+      const nextObjectives = current.filter((objective) => objective.id !== id);
+      persistCloudPatchNow({ objectives: nextObjectives });
+      return nextObjectives;
+    });
   };
 
   const openSettings = (section?: string) => {
@@ -8614,10 +10897,12 @@ export default function ReveeNorthApp() {
   }
 
   return (
-    <main className={darkMode ? "dark app-shell min-h-[100svh] bg-[#050505] text-white" : "min-h-[100svh]"}>
+    <main className={`${darkMode ? "dark app-shell bg-[#050505] text-white" : ""} ${workspaceMode === "business" ? "business-mode" : ""} min-h-[100svh]`}>
       <Sidebar
         active={active}
         setActive={setActive}
+        workspaceMode={workspaceMode}
+        setWorkspaceMode={setWorkspaceMode}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         isOpen={sidebarOpen}
@@ -8643,8 +10928,8 @@ export default function ReveeNorthApp() {
         <div className="mx-auto max-w-7xl">
           <header className="app-page-header relative z-30 mb-4 flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/28 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#050505] dark:backdrop-blur-none sm:p-5 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#d75c27]">
-                {copy.eyebrow}
+              <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${workspaceMode === "business" ? "text-[#0f766e]" : "text-[#d75c27]"}`}>
+                {workspaceMode === "business" && active === "Dashboard" ? "North Business" : copy.eyebrow}
               </p>
               <h1 className="mt-1 text-[1.55rem] font-extrabold tracking-tight text-[var(--foreground)] sm:text-2xl">
                 {active === "Dashboard" ? `${greeting}, ${user.firstName}.` : copy.title}
@@ -8708,28 +10993,53 @@ export default function ReveeNorthApp() {
                 <button
                   type="button"
                   onClick={() => setNewMenuOpen((current) => !current)}
-                  className="inline-flex items-center gap-2 rounded-[22px] bg-[#d75c27] px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-[#d75c27]/20 transition hover:-translate-y-0.5 hover:shadow-xl sm:px-5 sm:py-3"
+                  className={`inline-flex items-center gap-2 rounded-[22px] px-4 py-2.5 text-sm font-extrabold text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl sm:px-5 sm:py-3 ${
+                    workspaceMode === "business" ? "bg-[#0f766e] shadow-[#0f766e]/20" : "bg-[#d75c27] shadow-[#d75c27]/20"
+                  }`}
                 >
                   <Plus className="h-4 w-4" />
                   Novo
                 </button>
                 {newMenuOpen ? (
-                  <div className="app-popover absolute right-0 top-14 z-[120] w-72 max-w-[calc(100vw-1.5rem)] rounded-[28px] border border-white/70 bg-[#f5f2ef]/98 p-3 shadow-2xl backdrop-blur-2xl dark:border-white/12 dark:bg-[#050505]">
-                    {[
-                      [ArrowDownLeft, "Nova entrada", () => setIncomeModalOpen(true)],
-                      [ReceiptText, "Nova despesa", () => {
-                        setActive("Contas");
-                        setBillCreateModalOpen(true);
-                      }],
-                      [Target, "Nova meta", () => {
-                        setActive("Metas");
-                        setGoalCreateModalOpen(true);
-                      }],
-                      [Flag, "Novo objetivo", () => {
-                        setActive("Objetivos do mês");
-                        setObjectiveModalOpen(true);
-                      }],
-                    ].map(([Icon, label, action]) => {
+                  <div className="app-popover app-new-menu absolute right-0 top-14 z-[120] w-72 max-w-[calc(100vw-1.5rem)] rounded-[28px] border border-white/70 bg-[#f5f2ef]/98 p-3 shadow-2xl backdrop-blur-2xl dark:border-white/12 dark:bg-[#050505]">
+                    {(workspaceMode === "business"
+                      ? [
+                          [ArrowDownLeft, "Nova venda", () => {
+                            setActive("Vendas");
+                            setBusinessSaleModalOpen(true);
+                          }],
+                          [ReceiptText, "Nova saída", () => {
+                            setActive("Saídas");
+                            setBillCreateModalOpen(true);
+                          }],
+                          [Users, "Novo pró-labore", () => {
+                            setActive("Pró-labore");
+                            setBusinessPayrollModalOpen(true);
+                          }],
+                          [PiggyBank, "Guardar dinheiro", () => {
+                            setActive("Investimentos");
+                            setBusinessInvestmentModalOpen(true);
+                          }],
+                        ]
+                      : [
+                          [ArrowDownLeft, "Nova entrada", () => setIncomeModalOpen(true)],
+                          [ReceiptText, "Nova despesa", () => {
+                            setActive("Contas");
+                            setBillCreateModalOpen(true);
+                          }],
+                          [BadgeDollarSign, "Nova dívida", () => {
+                            setActive("Dívidas");
+                            setDebtModalOpen(true);
+                          }],
+                          [Target, "Nova meta", () => {
+                            setActive("Metas");
+                            setGoalCreateModalOpen(true);
+                          }],
+                          [Flag, "Novo objetivo", () => {
+                            setActive("Objetivos do mês");
+                            setObjectiveModalOpen(true);
+                          }],
+                        ]).map(([Icon, label, action]) => {
                       const MenuIcon = Icon as React.ElementType;
                       return (
                       <button
@@ -8756,14 +11066,38 @@ export default function ReveeNorthApp() {
 
           <ActiveView
             active={active}
+            setActive={setActive}
+            workspaceMode={workspaceMode}
             data={data}
+            business={business}
+            setBusiness={setBusiness}
+            selectedMonth={selectedMonth}
+            setSelectedMonth={setSelectedMonth}
+            onReceiveBusinessInstallment={handleReceiveBusinessInstallment}
+            onReceiveBusinessSaleBalance={handleReceiveBusinessSaleBalance}
+            onPayBusinessExpense={handlePayBill}
+            onUpdateBusinessMonthlyRevenueGoal={handleUpdateBusinessMonthlyRevenueGoal}
+            onOpenBusinessSale={setSelectedBusinessSale}
+            onOpenBusinessPayroll={setSelectedBusinessPayroll}
+            onOpenBusinessInvestment={setSelectedBusinessInvestment}
             metrics={metrics}
             onStartPayment={setPaymentBill}
             onOpenBill={setSelectedBill}
             onDeleteBills={handleDeleteBills}
             onDuplicateBills={handleDuplicateBills}
             categories={categories}
-            setCategories={setCategories}
+            setCategories={workspaceMode === "business"
+              ? ((updater) => {
+                  setBusiness((current) => {
+                    const nextCategories = typeof updater === "function"
+                      ? updater(current.categories)
+                      : updater;
+                    const nextBusiness = { ...current, categories: nextCategories };
+                    persistCloudPatchNow({ business: nextBusiness });
+                    return nextBusiness;
+                  });
+                }) as Dispatch<SetStateAction<Category[]>>
+              : setCategories}
             settingsSection={settingsSection}
             setSettingsSection={setSettingsSection}
             preferences={preferences}
@@ -8790,9 +11124,18 @@ export default function ReveeNorthApp() {
             onOpenIncome={setSelectedIncome}
             onOpenGoal={setSelectedGoal}
             onNewGoal={() => setGoalCreateModalOpen(true)}
+            debts={debts}
+            onNewDebt={() => setDebtModalOpen(true)}
+            onOpenDebt={setSelectedDebt}
+            onPayDebt={handlePayDebt}
             onToggleObjective={handleToggleObjective}
             onRemoveObjective={handleRemoveObjective}
             onNewObjective={() => setObjectiveModalOpen(true)}
+            planning={planning}
+            onSavePlanning={(nextPlanning) => {
+              setPlanning(nextPlanning);
+              persistCloudPatchNow({ planning: nextPlanning });
+            }}
             allIncomes={incomes}
             allBills={bills}
             allGoals={goals}
@@ -8803,7 +11146,7 @@ export default function ReveeNorthApp() {
       {selectedBill ? (
         <AccountModal
           bill={selectedBill}
-          categories={categories}
+          categories={workspaceMode === "business" ? business.categories : categories}
           onClose={() => setSelectedBill(null)}
           onSave={handleSaveBill}
           onDelete={handleDeleteBill}
@@ -8876,10 +11219,73 @@ export default function ReveeNorthApp() {
       ) : null}
       {billCreateModalOpen ? (
         <BillModalCreate
-          categories={categories}
+          categories={workspaceMode === "business" ? business.categories : categories}
           selectedMonth={selectedMonth}
           onClose={() => setBillCreateModalOpen(false)}
           onCreate={handleCreateBill}
+        />
+      ) : null}
+      {businessSaleModalOpen ? (
+        <BusinessSaleModal
+          selectedMonth={selectedMonth}
+          onClose={() => setBusinessSaleModalOpen(false)}
+          onSave={handleSaveBusinessSale}
+        />
+      ) : null}
+      {selectedBusinessSale ? (
+        <BusinessSaleModal
+          sale={selectedBusinessSale}
+          selectedMonth={selectedMonth}
+          onClose={() => setSelectedBusinessSale(null)}
+          onSave={handleSaveBusinessSale}
+          onDelete={handleDeleteBusinessSale}
+        />
+      ) : null}
+      {businessPayrollModalOpen ? (
+        <BusinessPayrollModal
+          selectedMonth={selectedMonth}
+          onClose={() => setBusinessPayrollModalOpen(false)}
+          onSave={handleSaveBusinessPayroll}
+        />
+      ) : null}
+      {selectedBusinessPayroll ? (
+        <BusinessPayrollModal
+          payroll={selectedBusinessPayroll}
+          selectedMonth={selectedMonth}
+          onClose={() => setSelectedBusinessPayroll(null)}
+          onSave={handleSaveBusinessPayroll}
+          onDelete={handleDeleteBusinessPayroll}
+        />
+      ) : null}
+      {businessInvestmentModalOpen ? (
+        <BusinessInvestmentModal
+          selectedMonth={selectedMonth}
+          onClose={() => setBusinessInvestmentModalOpen(false)}
+          onSave={handleSaveBusinessInvestment}
+        />
+      ) : null}
+      {selectedBusinessInvestment ? (
+        <BusinessInvestmentModal
+          investment={selectedBusinessInvestment}
+          selectedMonth={selectedMonth}
+          onClose={() => setSelectedBusinessInvestment(null)}
+          onSave={handleSaveBusinessInvestment}
+          onDelete={handleDeleteBusinessInvestment}
+        />
+      ) : null}
+      {debtModalOpen ? (
+        <DebtModal
+          onClose={() => setDebtModalOpen(false)}
+          onSave={handleSaveDebt}
+          onDelete={handleDeleteDebt}
+        />
+      ) : null}
+      {selectedDebt ? (
+        <DebtModal
+          debt={selectedDebt}
+          onClose={() => setSelectedDebt(null)}
+          onSave={handleSaveDebt}
+          onDelete={handleDeleteDebt}
         />
       ) : null}
       {selectedGoal ? (
@@ -8944,7 +11350,17 @@ export default function ReveeNorthApp() {
       {categoryModalOpen ? (
         <CategoryModal
           onClose={() => setCategoryModalOpen(false)}
-          onCreate={(category) => setCategories((current) => [...current, category])}
+          onCreate={(category) => {
+            if (workspaceMode === "business") {
+              setBusiness((current) => {
+                const nextBusiness = { ...current, categories: [...current.categories, { ...category, id: Date.now() }] };
+                persistCloudPatchNow({ business: nextBusiness });
+                return nextBusiness;
+              });
+              return;
+            }
+            setCategories((current) => [...current, category]);
+          }}
         />
       ) : null}
       {confirmModal ? (

@@ -341,3 +341,246 @@ main.dark,
       var(--background);
   }
 }
+
+body:has(main.business-mode):not(:has(main.dark)) {
+  --background: #f7f8f7;
+  --foreground: #211d19;
+  --accent: #0f766e;
+  --muted: #65706b;
+  --panel: rgba(255, 255, 255, 0.74);
+  --panel-strong: rgba(255, 255, 255, 0.92);
+  --line: rgba(15, 118, 110, 0.15);
+  --shadow: 0 14px 34px rgba(33, 29, 25, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(164, 244, 207, 0.12), transparent 24rem),
+    linear-gradient(135deg, #fbfbfa 0%, #f7f8f7 50%, #f0f3f2 100%) !important;
+  color: #211d19 !important;
+}
+
+main.business-mode {
+  background: transparent !important;
+  color: #211d19 !important;
+}
+
+.business-mode .app-page-header,
+.business-mode .app-top-control,
+.business-mode .app-popover,
+.business-mode .app-modal-panel,
+.business-mode .app-modal-inner,
+.business-mode .glass,
+.business-mode .glass-strong {
+  background: rgba(255, 255, 255, 0.76) !important;
+  border-color: rgba(15, 118, 110, 0.15) !important;
+  color: #211d19 !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.business-mode .app-muted-surface {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.business-mode > section h1,
+.business-mode > section h2,
+.business-mode > section h3,
+.business-mode > section h4 {
+  color: #211d19;
+}
+
+.business-mode [class*="text-[#d75c27]"],
+.business-mode [class*="text-\\[\\#d75c27\\]"],
+.business-mode .text-\[\#d75c27\],
+.business-mode [class*="text-[#b94d20]"],
+.business-mode [class*="text-\\[\\#b94d20\\]"],
+.business-mode [class*="text-[#9f421f]"],
+.business-mode [class*="text-\\[\\#9f421f\\]"] {
+  color: #0f766e !important;
+}
+
+.business-mode [class~="bg-[#d75c27]"],
+.business-mode [class~="bg-\\[\\#d75c27\\]"],
+.business-mode .bg-\[\#d75c27\],
+.business-mode [class~="hover:bg-[#d75c27]"]:hover,
+.business-mode [class~="hover:bg-\\[\\#d75c27\\]"]:hover {
+  background-color: #0f766e !important;
+}
+
+.business-mode [class*="bg-[#d75c27]/"],
+.business-mode [class*="bg-\\[\\#d75c27\\]/"] {
+  background-color: rgba(15, 118, 110, 0.1) !important;
+}
+
+.business-mode [class*="border-[#d75c27]"],
+.business-mode [class*="border-\\[\\#d75c27\\]"],
+.business-mode .border-\[\#d75c27\] {
+  border-color: rgba(15, 118, 110, 0.45) !important;
+}
+
+.business-mode [class*="ring-[#d75c27]"],
+.business-mode [class*="ring-\\[\\#d75c27\\]"] {
+  --tw-ring-color: rgba(15, 118, 110, 0.28) !important;
+}
+
+.business-mode [class*="shadow-[#d75c27]"],
+.business-mode [class*="shadow-\\[\\#d75c27\\]"] {
+  --tw-shadow-color: rgba(15, 118, 110, 0.2) !important;
+}
+
+.business-mode input,
+.business-mode textarea,
+.business-mode select {
+  background-color: rgba(255, 255, 255, 0.78) !important;
+  color: #211d19 !important;
+  border-color: rgba(15, 118, 110, 0.18) !important;
+}
+
+.business-mode .app-sidebar,
+.business-mode .app-sidebar h1,
+.business-mode .app-sidebar h2,
+.business-mode .app-sidebar h3,
+.business-mode .app-sidebar h4,
+.business-mode .app-sidebar p,
+.business-mode .app-sidebar span,
+.business-mode .app-sidebar button,
+.business-mode .app-sidebar a {
+  color: #ffffff !important;
+}
+
+.business-mode .app-sidebar [class*="text-emerald"],
+.business-mode .app-sidebar .text-\[\#0f766e\] {
+  color: #a4f4cf !important;
+}
+
+body:has(main.business-mode.dark) {
+  --background: #06120f;
+  --foreground: #f7fbf9;
+  --accent: #a4f4cf;
+  --muted: rgba(247, 251, 249, 0.64);
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel-strong: rgba(9, 24, 20, 0.92);
+  --line: rgba(164, 244, 207, 0.16);
+  --shadow: 0 18px 46px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(164, 244, 207, 0.1), transparent 24rem),
+    linear-gradient(135deg, #06120f 0%, #081814 52%, #07110f 100%) !important;
+  color: #f7fbf9 !important;
+}
+
+main.business-mode.dark {
+  color: #f7fbf9 !important;
+}
+
+.business-mode.dark .app-page-header,
+.business-mode.dark .app-top-control,
+.business-mode.dark .app-popover,
+.business-mode.dark .app-modal-panel,
+.business-mode.dark .app-modal-inner,
+.business-mode.dark .glass,
+.business-mode.dark .glass-strong {
+  background: rgba(9, 24, 20, 0.78) !important;
+  border-color: rgba(164, 244, 207, 0.16) !important;
+  color: #f7fbf9 !important;
+}
+
+.business-mode.dark > section h1,
+.business-mode.dark > section h2,
+.business-mode.dark > section h3,
+.business-mode.dark > section h4,
+.business-mode.dark > section p,
+.business-mode.dark > section span,
+.business-mode.dark > section label {
+  color: inherit;
+}
+
+.business-mode.dark .app-muted-surface,
+.business-mode.dark input,
+.business-mode.dark textarea,
+.business-mode.dark select {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: #f7fbf9 !important;
+  border-color: rgba(164, 244, 207, 0.16) !important;
+}
+
+.business-mode.dark [class*="text-[#d75c27]"],
+.business-mode.dark [class*="text-\\[\\#d75c27\\]"],
+.business-mode.dark .text-\[\#d75c27\],
+.business-mode.dark [class*="text-[#b94d20]"],
+.business-mode.dark [class*="text-\\[\\#b94d20\\]"],
+.business-mode.dark [class*="text-[#9f421f]"],
+.business-mode.dark [class*="text-\\[\\#9f421f\\]"] {
+  color: #a4f4cf !important;
+}
+
+.business-mode .app-sidebar .app-profile-menu {
+  background: rgba(244, 241, 238, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  color: #211d19 !important;
+  box-shadow: 0 24px 70px rgba(33, 29, 25, 0.22) !important;
+}
+
+.business-mode .app-sidebar .app-profile-menu button,
+.business-mode .app-sidebar .app-profile-menu span {
+  color: #211d19 !important;
+}
+
+.business-mode .app-sidebar .app-profile-menu svg {
+  color: #0f766e !important;
+}
+
+.business-mode .app-sidebar .app-profile-menu button:hover {
+  background: rgba(33, 29, 25, 0.08) !important;
+}
+
+.business-mode.dark .app-sidebar .app-profile-menu {
+  background: rgba(5, 5, 5, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5) !important;
+}
+
+.business-mode.dark .app-sidebar .app-profile-menu button,
+.business-mode.dark .app-sidebar .app-profile-menu span {
+  color: #ffffff !important;
+}
+
+.business-mode.dark .app-sidebar .app-profile-menu svg {
+  color: #a4f4cf !important;
+}
+
+.business-mode.dark .app-sidebar .app-profile-menu button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.business-mode .app-new-menu {
+  background: rgba(251, 251, 250, 0.98) !important;
+  border-color: rgba(15, 118, 110, 0.16) !important;
+  color: #211d19 !important;
+  box-shadow: 0 24px 70px rgba(33, 29, 25, 0.14) !important;
+}
+
+.business-mode .app-new-menu button {
+  color: #211d19 !important;
+}
+
+.business-mode .app-new-menu button:hover {
+  background: rgba(15, 118, 110, 0.08) !important;
+}
+
+.business-mode .app-new-menu button span {
+  background: rgba(15, 118, 110, 0.08) !important;
+  color: #0f766e !important;
+}
+
+.business-mode.dark .app-new-menu {
+  background: rgba(7, 17, 15, 0.98) !important;
+  border-color: rgba(164, 244, 207, 0.14) !important;
+  color: #ffffff !important;
+}
+
+.business-mode.dark .app-new-menu button {
+  color: #ffffff !important;
+}
+
+.business-mode.dark .app-new-menu button span {
+  background: rgba(164, 244, 207, 0.1) !important;
+  color: #a4f4cf !important;
+}
