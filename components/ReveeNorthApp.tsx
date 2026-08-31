@@ -669,14 +669,21 @@ function getAccountCreatedAt() {
   return createdAt;
 }
 
-function buildMonthOptions(accountCreatedAt: string) {
-  const startMonth = monthKey(accountCreatedAt);
+function buildMonthOptions(accountCreatedAt: string, earliestMonth?: string) {
+  const startMonth = earliestMonth && earliestMonth < monthKey(accountCreatedAt) ? earliestMonth : monthKey(accountCreatedAt);
   const endMonth = addMonths(monthKey(getTodayKey()), 3);
   const options: { value: string; label: string }[] = [];
   for (let value = startMonth; value <= endMonth; value = addMonths(value, 1)) {
     options.push({ value, label: monthLabel(value) });
   }
   return options;
+}
+
+function earliestMonthFromDates(dates: Array<string | undefined>) {
+  return dates
+    .filter((date): date is string => Boolean(date))
+    .map((date) => monthKey(date))
+    .sort()[0];
 }
 
 function buildMonthRange(fromMonth: string, toMonth: string) {
@@ -2213,12 +2220,14 @@ function MonthFilter({
   selectedMonth,
   setSelectedMonth,
   accountCreatedAt,
+  earliestMonth,
 }: {
   selectedMonth: string;
   setSelectedMonth: (month: string) => void;
   accountCreatedAt: string;
+  earliestMonth?: string;
 }) {
-  const options = buildMonthOptions(accountCreatedAt);
+  const options = buildMonthOptions(accountCreatedAt, earliestMonth);
 
   return (
     <label className="app-top-control flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-[var(--line)] bg-white/45 px-3 py-2 text-xs font-bold dark:bg-[#050505] sm:flex-none">
@@ -4124,7 +4133,20 @@ function BusinessInvestmentsView({ business, selectedMonth, onOpenInvestment }: 
 }
 
 function BusinessBalanceView({ business, selectedMonth }: { business: BusinessState; selectedMonth: string }) {
-  const months = buildMonthRange(`${selectedMonth.slice(0, 4)}-01`, `${selectedMonth.slice(0, 4)}-12`);
+  const availableYears = Array.from(new Set([
+    selectedMonth.slice(0, 4),
+    ...business.sales.flatMap((sale) => [
+      sale.closedDate.slice(0, 4),
+      sale.receivedDate?.slice(0, 4),
+      ...sale.installments.flatMap((installment) => [installment.dueDate.slice(0, 4), installment.receivedDate?.slice(0, 4)]),
+    ]),
+    ...business.expenses.flatMap((bill) => [bill.dueDate.slice(0, 4), bill.paidDate?.slice(0, 4)]),
+    ...business.payroll.map((item) => item.paidDate.slice(0, 4)),
+    ...(business.investments ?? []).map((item) => item.date.slice(0, 4)),
+  ].filter((year): year is string => Boolean(year)))).sort((a, b) => b.localeCompare(a));
+  const [selectedYear, setSelectedYear] = useState(selectedMonth.slice(0, 4));
+  const balanceYear = availableYears.includes(selectedYear) ? selectedYear : availableYears[0] ?? selectedMonth.slice(0, 4);
+  const months = buildMonthRange(`${balanceYear}-01`, `${balanceYear}-12`);
   const monthly = months.map((month) => ({ month, metrics: buildBusinessMetrics(business, month) }));
   const yearMetrics = monthly.reduce(
     (total, item) => ({
@@ -4145,7 +4167,7 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
         business.expenses.filter(
           (bill) =>
             bill.status === "paga" &&
-            bill.paidDate?.slice(0, 4) === selectedMonth.slice(0, 4) &&
+            bill.paidDate?.slice(0, 4) === balanceYear &&
             normalizeCategoryName(bill.category) === normalizeCategoryName(category.name),
         ),
         (bill) => bill.paidAmount ?? bill.expectedAmount,
@@ -4160,6 +4182,19 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
 
   return (
     <div className="space-y-4">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Filtro anual</p>
+          <h3 className="mt-1 text-lg font-extrabold">Balanço de {balanceYear}</h3>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Escolha o ano para ver todos os meses e o resumo completo.</p>
+        </div>
+        <label className="inline-flex w-fit items-center gap-2 rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-3 text-sm font-extrabold dark:bg-white/6">
+          <CalendarDays className="h-4 w-4 text-[#0f766e]" />
+          <select value={balanceYear} onChange={(event) => setSelectedYear(event.target.value)} className="bg-transparent outline-none">
+            {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+      </Card>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <BusinessMetricCard label="Recebido no ano" value={formatCurrency(yearMetrics.received)} helper="Valores que entraram na conta" icon={Wallet} />
         <BusinessMetricCard label="Saídas pagas" value={formatCurrency(yearMetrics.expensesPaid)} helper="Despesas operacionais" icon={ReceiptText} tone="blue" />
@@ -7612,6 +7647,8 @@ function ConfirmModal({
   onConfirm: () => void;
 }) {
   const isLogout = title.toLowerCase().includes("sair");
+  const isImport = title.toLowerCase().includes("importar");
+  const isReset = title.toLowerCase().includes("zerar");
 
   return (
     <Modal title={title || "Tem certeza?"} onClose={onClose}>
@@ -7631,10 +7668,10 @@ function ConfirmModal({
             onClose();
           }}
           className={`rounded-2xl px-5 py-2.5 text-xs font-extrabold text-white ${
-            isLogout ? "bg-[#d75c27] shadow-[0_14px_28px_rgba(215,92,39,.22)]" : "bg-red-600"
+            isLogout || isImport ? "bg-[#0f766e] shadow-[0_14px_28px_rgba(15,118,110,.22)]" : "bg-red-600"
           }`}
         >
-          {isLogout ? "Sair" : "Excluir"}
+          {isLogout ? "Sair" : isImport ? "Importar" : isReset ? "Zerar tudo" : "Excluir"}
         </button>
       </div>
     </Modal>
@@ -10062,13 +10099,30 @@ export default function ReveeNorthApp() {
     localStorage.setItem("reveenorth:categories", JSON.stringify(categories));
   }, [categories]);
 
+  const earliestDataMonth = useMemo(() => earliestMonthFromDates([
+    accountCreatedAt,
+    ...incomes.map((income) => income.receivedDate),
+    ...bills.flatMap((bill) => [bill.dueDate, bill.paidDate]),
+    ...goals.map((goal) => goal.deadline),
+    ...objectives.map((objective) => `${objective.month}-01`),
+    ...debts.flatMap((debt) => [debt.createdAt, debt.paidAt]),
+    ...business.sales.flatMap((sale) => [
+      sale.closedDate,
+      sale.receivedDate,
+      ...sale.installments.flatMap((installment) => [installment.dueDate, installment.receivedDate]),
+    ]),
+    ...business.expenses.flatMap((bill) => [bill.dueDate, bill.paidDate]),
+    ...business.payroll.map((item) => item.paidDate),
+    ...(business.investments ?? []).map((item) => item.date),
+  ]), [accountCreatedAt, bills, business, debts, goals, incomes, objectives]);
+
   useEffect(() => {
     localStorage.setItem("reveenorth:account-created-at", accountCreatedAt);
-    const options = buildMonthOptions(accountCreatedAt);
+    const options = buildMonthOptions(accountCreatedAt, earliestDataMonth);
     if (!options.some((option) => option.value === selectedMonth)) {
       setSelectedMonth(monthKey(getTodayKey()));
     }
-  }, [accountCreatedAt, selectedMonth]);
+  }, [accountCreatedAt, earliestDataMonth, selectedMonth]);
 
   useEffect(() => {
     setBills((current) => {
@@ -10178,7 +10232,6 @@ export default function ReveeNorthApp() {
     if (hour >= 12 && hour < 18) return "Boa tarde";
     return "Boa noite";
   }, []);
-
   const showFeedback = (title: string, message: string, kind: FeedbackToast["kind"] = "success") => {
     const toast = { id: Date.now(), title, message, kind };
     setFeedbackToast(toast);
@@ -10746,21 +10799,43 @@ export default function ReveeNorthApp() {
   const handleImportHistoricalBusinessSales = () => {
     confirmDanger(
       "Importar histórico enviado?",
-      `Isso adiciona ${historicalBusinessSalesImport.length} vendas antigas na área Empresa. Se algum registro já tiver sido importado antes, ele não será duplicado.`,
+      `Isso vai deixar a base financeira somente com as ${historicalBusinessSalesImport.length} vendas da lista enviada. Entradas pessoais, contas, metas, reserva, investimentos, pró-labore e exemplos antigos serão zerados.`,
       () => {
-        setBusiness((current) => {
-          const existingIds = new Set(current.sales.map((sale) => sale.id));
-          const importedSales = historicalBusinessSalesImport.filter((sale) => !existingIds.has(sale.id));
-          const nextBusiness = {
-            ...current,
-            sales: [...current.sales, ...importedSales].sort((a, b) => a.closedDate.localeCompare(b.closedDate)),
-          };
-          persistCloudPatchNow({ business: nextBusiness, workspaceMode: "business" });
-          return nextBusiness;
-        });
+        const importedBusiness = {
+          ...defaultBusinessState(),
+          sales: [...historicalBusinessSalesImport].sort((a, b) => a.closedDate.localeCompare(b.closedDate)),
+          settings: {
+            ...defaultBusinessState().settings,
+            annualRevenueGoal: business.settings.annualRevenueGoal,
+            monthlyRevenueGoal: business.settings.monthlyRevenueGoal,
+            monthlyProLaboreGoal: business.settings.monthlyProLaboreGoal,
+          },
+        };
+        const cleanRealBalance = { amount: 0, date: getTodayKey(), note: "" };
+        setBills([]);
+        setDebts([]);
+        setIncomes([]);
+        setGoals([]);
+        setObjectives([]);
+        setPlanning(undefined);
+        setBusiness(importedBusiness);
+        setRealBalance(cleanRealBalance);
         setWorkspaceMode("business");
         setActive("Vendas");
-        showFeedback("Histórico importado.", "As vendas antigas foram adicionadas na empresa.");
+        setSelectedMonth("2026-08");
+        persistCloudPatchNow({
+          bills: [],
+          debts: [],
+          incomes: [],
+          goals: [],
+          objectives: [],
+          planning: undefined,
+          business: importedBusiness,
+          realBalance: cleanRealBalance,
+          workspaceMode: "business",
+          selectedMonth: "2026-08",
+        });
+        showFeedback("Histórico importado.", "A base ficou somente com as vendas da sua lista.");
       },
     );
   };
@@ -10940,6 +11015,7 @@ export default function ReveeNorthApp() {
                 selectedMonth={selectedMonth}
                 setSelectedMonth={setSelectedMonth}
                 accountCreatedAt={accountCreatedAt}
+                earliestMonth={earliestDataMonth}
               />
               <div className="relative">
                 <button
