@@ -10982,12 +10982,15 @@ export default function ReveeNorthApp() {
 
   return (
     <main className={`${darkMode ? "dark app-shell bg-[#050505] text-white" : ""} ${workspaceMode === "business" ? "business-mode" : ""} min-h-[100svh]`}>
-      <Sidebar
-        active={active}
-        setActive={setActive}
-        workspaceMode={workspaceMode}
-        setWorkspaceMode={setWorkspaceMode}
-        darkMode={darkMode}
+          <Sidebar
+            active={active}
+            setActive={setActive}
+            workspaceMode={workspaceMode}
+            setWorkspaceMode={(mode) => {
+              setWorkspaceMode(mode);
+              if (mode === "personal") setSelectedMonth(monthKey(getTodayKey()));
+            }}
+            darkMode={darkMode}
         setDarkMode={setDarkMode}
         isOpen={sidebarOpen}
         setIsOpen={setSidebarOpen}
