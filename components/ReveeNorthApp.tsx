@@ -4269,21 +4269,28 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Tabela executiva</p>
         <div className="mt-4 overflow-x-auto">
           <div className="min-w-[860px] overflow-hidden rounded-2xl border border-[var(--line)]">
-            <div className="grid grid-cols-[120px_repeat(7,1fr)] bg-[#0f766e] px-3 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-white">
-              {["Mês", "Entrou", "Saiu", "Salários", "Guardado", "Taxas", "Ticket", "Lucro"].map((label) => <span key={label}>{label}</span>)}
+            <div className="grid grid-cols-[120px_repeat(8,1fr)] bg-[#0f766e] px-3 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-white">
+              {["Mês", "Fechado", "Recebido", "Aberto", "Saiu", "Salários", "Taxas", "Guardado", "Lucro"].map((label) => <span key={label}>{label}</span>)}
             </div>
-            {monthly.map(({ month, metrics }) => (
-              <div key={month} className="grid grid-cols-[120px_repeat(7,1fr)] border-t border-[var(--line)] px-3 py-3 text-xs font-bold">
-                <span className="font-black">{monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}</span>
-                <span>{formatCurrency(metrics.received)}</span>
-                <span>{formatCurrency(metrics.expensesPaid)}</span>
-                <span>{formatCurrency(metrics.proLabore)}</span>
-                <span>{formatCurrency(metrics.saved)}</span>
-                <span>{formatCurrency(metrics.fees)}</span>
-                <span>{formatCurrency(metrics.averageTicket)}</span>
-                <span className={metrics.profit >= 0 ? "text-emerald-700 dark:text-emerald-200" : "text-red-600"}>{formatCurrency(metrics.profit)}</span>
-              </div>
-            ))}
+            {monthly.map(({ month, metrics }) => {
+              const openTotal = sum(
+                buildBusinessMonthData(business, month).receivables,
+                ({ installment }) => Math.max(0, installment.amount - (installment.receivedAmount ?? 0)),
+              );
+              return (
+                <div key={month} className="grid grid-cols-[120px_repeat(8,1fr)] border-t border-[var(--line)] px-3 py-3 text-xs font-bold">
+                  <span className="font-black">{monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}</span>
+                  <span>{formatCurrency(metrics.closed)}</span>
+                  <span>{formatCurrency(metrics.received)}</span>
+                  <span>{formatCurrency(openTotal)}</span>
+                  <span>{formatCurrency(metrics.expensesPaid)}</span>
+                  <span>{formatCurrency(metrics.proLabore + metrics.bonus)}</span>
+                  <span>{formatCurrency(metrics.fees)}</span>
+                  <span>{formatCurrency(metrics.saved)}</span>
+                  <span className={metrics.profit >= 0 ? "text-emerald-700 dark:text-emerald-200" : "text-red-600"}>{formatCurrency(metrics.profit)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </Card>
@@ -9831,8 +9838,8 @@ const viewCopy: Record<string, { eyebrow: string; title: string; description: st
   },
   Balanço: {
     eyebrow: "Balanço",
-    title: "Balanço mensal",
-    description: "Resumo mês a mês de entradas, saídas, salários, taxas, ticket médio e lucro.",
+    title: "Balanço anual",
+    description: "Escolha o ano para ver todos os meses, recebimentos, taxas, aberto e lucro.",
   },
   Dívidas: {
     eyebrow: "Limpeza do nome",
@@ -10822,7 +10829,8 @@ export default function ReveeNorthApp() {
         setRealBalance(cleanRealBalance);
         setWorkspaceMode("business");
         setActive("Vendas");
-        setSelectedMonth("2026-08");
+        const importStartMonth = earliestMonthFromDates(importedBusiness.sales.map((sale) => sale.closedDate)) ?? "2022-09";
+        setSelectedMonth(importStartMonth);
         persistCloudPatchNow({
           bills: [],
           debts: [],
@@ -10833,7 +10841,7 @@ export default function ReveeNorthApp() {
           business: importedBusiness,
           realBalance: cleanRealBalance,
           workspaceMode: "business",
-          selectedMonth: "2026-08",
+          selectedMonth: importStartMonth,
         });
         showFeedback("Histórico importado.", "A base ficou somente com as vendas da sua lista.");
       },
