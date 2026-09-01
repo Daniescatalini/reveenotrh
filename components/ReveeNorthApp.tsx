@@ -10106,13 +10106,16 @@ export default function ReveeNorthApp() {
     localStorage.setItem("reveenorth:categories", JSON.stringify(categories));
   }, [categories]);
 
-  const earliestDataMonth = useMemo(() => earliestMonthFromDates([
+  const earliestPersonalMonth = useMemo(() => earliestMonthFromDates([
     accountCreatedAt,
     ...incomes.map((income) => income.receivedDate),
     ...bills.flatMap((bill) => [bill.dueDate, bill.paidDate]),
     ...goals.map((goal) => goal.deadline),
     ...objectives.map((objective) => `${objective.month}-01`),
     ...debts.flatMap((debt) => [debt.createdAt, debt.paidAt]),
+  ]), [accountCreatedAt, bills, debts, goals, incomes, objectives]);
+  const earliestBusinessMonth = useMemo(() => earliestMonthFromDates([
+    accountCreatedAt,
     ...business.sales.flatMap((sale) => [
       sale.closedDate,
       sale.receivedDate,
@@ -10121,7 +10124,8 @@ export default function ReveeNorthApp() {
     ...business.expenses.flatMap((bill) => [bill.dueDate, bill.paidDate]),
     ...business.payroll.map((item) => item.paidDate),
     ...(business.investments ?? []).map((item) => item.date),
-  ]), [accountCreatedAt, bills, business, debts, goals, incomes, objectives]);
+  ]), [accountCreatedAt, business]);
+  const earliestDataMonth = workspaceMode === "business" ? earliestBusinessMonth : earliestPersonalMonth;
 
   useEffect(() => {
     localStorage.setItem("reveenorth:account-created-at", accountCreatedAt);
