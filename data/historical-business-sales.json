@@ -176,10 +176,9 @@
     "clientName": "Thauane Guarate",
     "service": "Identidade Visual",
     "closedAmount": 920,
-    "receivedAmount": 920,
-    "receivedDate": "2023-08-24",
+    "receivedAmount": 0,
     "closedDate": "2023-08-24",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -192,11 +191,17 @@
       },
       {
         "id": 9000122,
-        "dueDate": "2023-08-24",
+        "dueDate": "2023-09-13",
         "amount": 460,
         "received": true,
         "receivedAmount": 460,
-        "receivedDate": "2023-08-24"
+        "receivedDate": "2023-09-13"
+      },
+      {
+        "id": 9000123,
+        "dueDate": "2023-09-13",
+        "amount": 160,
+        "received": false
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 24/08/2023 Thauane Guarate - identidade visual 920,00 pago 300 no pix dia 24/08/2023 e 460,00 uns 20 dias depois não anotei"
@@ -271,10 +276,9 @@
     "clientName": "Luana Ribeiro",
     "service": "Identidade Visual",
     "closedAmount": 990,
-    "receivedAmount": 990,
-    "receivedDate": "2023-10-18",
+    "receivedAmount": 0,
     "closedDate": "2023-10-18",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -348,10 +352,9 @@
     "clientName": "Geisi Ramalho",
     "service": "Identidade Visual",
     "closedAmount": 980,
-    "receivedAmount": 980,
-    "receivedDate": "2023-12-31",
+    "receivedAmount": 0,
     "closedDate": "2023-12-31",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -391,67 +394,42 @@
     "clientName": "Manuele Broges",
     "service": "Identidade Visual E Naming",
     "closedAmount": 1987.74,
-    "receivedAmount": 1987.74,
-    "receivedDate": "2024-01-03",
+    "receivedAmount": 0,
     "closedDate": "2024-01-03",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
         "id": 9000241,
         "dueDate": "2024-01-03",
-        "amount": 1512,
+        "amount": 400,
         "received": true,
-        "receivedAmount": 1512,
+        "receivedAmount": 400,
         "receivedDate": "2024-01-03"
       },
       {
         "id": 9000242,
-        "dueDate": "2024-04-03",
-        "amount": 3582,
+        "dueDate": "2024-01-05",
+        "amount": 963.74,
         "received": true,
-        "receivedAmount": 3582,
-        "receivedDate": "2024-04-03"
+        "receivedAmount": 963.74,
+        "receivedDate": "2024-01-05"
       },
       {
         "id": 9000243,
-        "dueDate": "2024-04-29",
-        "amount": 400,
+        "dueDate": "2024-04-03",
+        "amount": 500,
         "received": true,
-        "receivedAmount": 400,
-        "receivedDate": "2024-04-29"
+        "receivedAmount": 500,
+        "receivedDate": "2024-04-03"
       },
       {
         "id": 9000244,
         "dueDate": "2024-04-29",
-        "amount": 1987.74,
+        "amount": 124,
         "received": true,
-        "receivedAmount": 1987.74,
+        "receivedAmount": 124,
         "receivedDate": "2024-04-29"
-      },
-      {
-        "id": 9000245,
-        "dueDate": "2024-01-03",
-        "amount": 963.74,
-        "received": true,
-        "receivedAmount": 963.74,
-        "receivedDate": "2024-01-03"
-      },
-      {
-        "id": 9000246,
-        "dueDate": "2024-01-03",
-        "amount": 500,
-        "received": true,
-        "receivedAmount": 500,
-        "receivedDate": "2024-01-03"
-      },
-      {
-        "id": 9000247,
-        "dueDate": "2024-01-03",
-        "amount": 500,
-        "received": true,
-        "receivedAmount": 500,
-        "receivedDate": "2024-01-03"
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 03/01/2024 Manuele Broges - identidade visual e naming (sendo naming 2.070 e identidade visual 1.512,00) - 3.582,00 o pagamento ta uma bagunça 400,00 dia 03/01/2024 pix e ai em 4x no pix aqui ela cancelou a identidade visual e acertou só o naming 1.987,74 dia 5 ela pagou R$ 963,74 dia 03/04/2024 ela pagou mais 500,00 dia 29/04/2024 ela pagou 500 não sei o que aconteceu aqui"
@@ -717,10 +695,9 @@
     "clientName": "Edneia Cabral",
     "service": "Naming E Identidade Visual",
     "closedAmount": 7280,
-    "receivedAmount": 7280,
-    "receivedDate": "2024-06-28",
+    "receivedAmount": 0,
     "closedDate": "2024-06-28",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -755,10 +732,9 @@
     "clientName": "Neia Carrasco",
     "service": "Papelaria",
     "closedAmount": 1132,
-    "receivedAmount": 1132,
-    "receivedDate": "2024-08-27",
+    "receivedAmount": 0,
     "closedDate": "2024-08-27",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -811,10 +787,9 @@
     "clientName": "Lara Astério",
     "service": "Identidade Visual",
     "closedAmount": 891,
-    "receivedAmount": 891,
-    "receivedDate": "2024-08-28",
+    "receivedAmount": 0,
     "closedDate": "2024-08-28",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -824,6 +799,12 @@
         "received": true,
         "receivedAmount": 445.5,
         "receivedDate": "2024-08-28"
+      },
+      {
+        "id": 9000452,
+        "dueDate": "2024-09-20",
+        "amount": 445.5,
+        "received": false
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 28/08/2024 Lara Astério - identidade visual 891,00 entrada 445,50 dia 28/08 e o restante 20/09"
@@ -911,10 +892,9 @@
     "clientName": "Flávia Motta",
     "service": "Site",
     "closedAmount": 600,
-    "receivedAmount": 600,
-    "receivedDate": "2024-11-08",
+    "receivedAmount": 0,
     "closedDate": "2024-11-08",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -946,10 +926,9 @@
     "clientName": "Solange Gomes",
     "service": "Identidade Visual",
     "closedAmount": 1000,
-    "receivedAmount": 1000,
-    "receivedDate": "2025-03-31",
+    "receivedAmount": 0,
     "closedDate": "2025-03-31",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -959,6 +938,12 @@
         "received": true,
         "receivedAmount": 500,
         "receivedDate": "2025-03-31"
+      },
+      {
+        "id": 9000542,
+        "dueDate": "2025-04-25",
+        "amount": 500,
+        "received": false
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 31/03/2025 Solange Gomes - identidade visual 1.000 sendo 500,00 dia 31/03 e o restante 25/04"
@@ -994,19 +979,24 @@
     "clientName": "Fabiane Arcos",
     "service": "Identidade Visual",
     "closedAmount": 500,
-    "receivedAmount": 500,
-    "receivedDate": "2024-11-10",
+    "receivedAmount": 0,
     "closedDate": "2024-11-10",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
         "id": 9000571,
         "dueDate": "2024-11-10",
-        "amount": 2025,
+        "amount": 250,
         "received": true,
-        "receivedAmount": 2025,
+        "receivedAmount": 250,
         "receivedDate": "2024-11-10"
+      },
+      {
+        "id": 9000572,
+        "dueDate": "2025-03-01",
+        "amount": 250,
+        "received": false
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 10/11/2024 Fabiane Arcos - identidade visual 500,00 metade dia 10/11 e o restante ela atrasou pra pagar acho que pagou só em março de 2025 mais não anotei"
@@ -1068,10 +1058,9 @@
     "clientName": "Annanda Moraes",
     "service": "Identidade Visual",
     "closedAmount": 2250,
-    "receivedAmount": 2250,
-    "receivedDate": "2025-02-18",
+    "receivedAmount": 0,
     "closedDate": "2025-02-18",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -1081,6 +1070,12 @@
         "received": true,
         "receivedAmount": 1125,
         "receivedDate": "2025-02-18"
+      },
+      {
+        "id": 9000622,
+        "dueDate": "2025-03-07",
+        "amount": 1125,
+        "received": false
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 18/02/2025 Annanda Moraes  - identidade visual 2.250 sendo 1.125 via piz no dia 18/02 e o restante pix dia 07/03"
@@ -1090,10 +1085,9 @@
     "clientName": "Vanessa Galvão",
     "service": "Identidade Visual",
     "closedAmount": 1000,
-    "receivedAmount": 1000,
-    "receivedDate": "2025-02-20",
+    "receivedAmount": 0,
     "closedDate": "2025-02-20",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -1103,6 +1097,12 @@
         "received": true,
         "receivedAmount": 500,
         "receivedDate": "2025-02-20"
+      },
+      {
+        "id": 9000632,
+        "dueDate": "2025-03-14",
+        "amount": 500,
+        "received": false
       }
     ],
     "notes": "REVISAR: Importado do histórico enviado. Original: 20/02/2025 Vanessa Galvão - identidade visual 1.000 sendo dividido em 2x no pix entrada 500 dia 20/02 e restante 14/03"
@@ -1151,10 +1151,9 @@
     "clientName": "Danielle Furla",
     "service": "Identidade Visual",
     "closedAmount": 5600,
-    "receivedAmount": 5600,
-    "receivedDate": "2025-07-10",
+    "receivedAmount": 0,
     "closedDate": "2025-07-10",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -1246,10 +1245,9 @@
     "clientName": "Ana Meregalli",
     "service": "Naming",
     "closedAmount": 3800,
-    "receivedAmount": 3800,
-    "receivedDate": "2025-11-24",
+    "receivedAmount": 0,
     "closedDate": "2025-11-24",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
@@ -1783,10 +1781,9 @@
     "clientName": "Maris Tavares",
     "service": "Site",
     "closedAmount": 1500,
-    "receivedAmount": 1500,
-    "receivedDate": "2025-07-15",
+    "receivedAmount": 0,
     "closedDate": "2025-07-15",
-    "paymentMethod": "Pix",
+    "paymentMethod": "Boleto",
     "cardFee": 0,
     "installments": [
       {
