@@ -832,12 +832,14 @@ function buildBusinessMetrics(business: BusinessState, selectedMonth: string) {
   const goalRemaining = Math.max(0, business.settings.annualRevenueGoal - yearClosed);
   const monthlyGoalRequired = goalRemaining / monthsRemainingInYear(selectedMonth);
   const averageTicket = data.sales.length ? closed / data.sales.length : 0;
+  const netRevenue = Math.max(0, received - fees);
   const profit = received - expensesPaid - proLabore - bonus - fees - saved;
 
   return {
     ...data,
     closed,
     received,
+    netRevenue,
     fees,
     open,
     expensesPaid,
@@ -1088,11 +1090,11 @@ function buildVisibleBills(allBills: Bill[], selectedMonth: string) {
   const normalized = allBills.map((bill) => normalizeBillStatus(bill));
   const monthBills = normalized.filter((bill) => monthKey(bill.dueDate) === selectedMonth);
   if (selectedMonth !== currentMonth) return monthBills.sort(sortByPaymentPriority);
-  const carriedOverdue = normalized.filter(
-    (bill) => bill.status !== "paga" && monthKey(bill.dueDate) < selectedMonth && isBillOverdue(bill),
+  const carriedOpen = normalized.filter(
+    (bill) => bill.status !== "paga" && monthKey(bill.dueDate) < selectedMonth,
   );
   const ids = new Set(monthBills.map((bill) => bill.id));
-  return [...carriedOverdue.filter((bill) => !ids.has(bill.id)), ...monthBills].sort(sortByPaymentPriority);
+  return [...carriedOpen.filter((bill) => !ids.has(bill.id)), ...monthBills].sort(sortByPaymentPriority);
 }
 
 function overdueLabel(bill: Bill) {
@@ -3906,8 +3908,8 @@ function BusinessDashboard({
 
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <div className="grid gap-3 md:grid-cols-2">
-          <BusinessMetricCard label="Valor fechado" value={formatCurrency(metrics.closed)} helper={`${metrics.sales.length} venda(s) no mês`} icon={BadgeDollarSign} />
-          <BusinessMetricCard label="Valor recebido" value={formatCurrency(metrics.received)} helper="Entrou de fato na conta" icon={Wallet} tone="blue" />
+          <BusinessMetricCard label="Faturamento bruto" value={formatCurrency(metrics.closed)} helper={`${metrics.sales.length} venda(s) fechada(s) no mês`} icon={BadgeDollarSign} />
+          <BusinessMetricCard label="Faturamento líquido" value={formatCurrency(metrics.netRevenue)} helper="Recebido de fato menos taxas" icon={Wallet} tone="blue" />
           <BusinessMetricCard label="Taxas" value={formatCurrency(metrics.fees)} helper="Cartão de crédito no mês" icon={CreditCard} tone="amber" />
           <BusinessMetricCard label="Em aberto" value={formatCurrency(metrics.open)} helper="Boletos e saldos a receber" icon={CircleAlert} tone="dark" />
         </div>
@@ -3984,10 +3986,10 @@ function BusinessSalesView({
       .map(({ sale, installment }) => ({ kind: "installment" as const, sale, installment })),
   ];
   const rows = [
-    { label: "Valor fechado", value: metrics.closed, helper: "Vendas do mês" },
-    { label: "Valor recebido", value: metrics.received, helper: "Entrou na conta" },
-    { label: "Taxas", value: metrics.fees, helper: "Cartão de crédito" },
-    { label: "Em aberto", value: metrics.open, helper: "Boletos e saldos futuros" },
+    { label: "Faturamento bruto", value: metrics.closed, helper: "Vendas fechadas no mês" },
+    { label: "Recebido", value: metrics.received, helper: "Entrou de fato na conta" },
+    { label: "Taxas", value: metrics.fees, helper: "Cartão e descontos" },
+    { label: "Faturamento líquido", value: metrics.netRevenue, helper: "Recebido menos taxas" },
   ];
 
   return (
@@ -4132,7 +4134,17 @@ function BusinessInvestmentsView({ business, selectedMonth, onOpenInvestment }: 
   );
 }
 
-function BusinessBalanceView({ business, selectedMonth }: { business: BusinessState; selectedMonth: string }) {
+function BusinessBalanceView({
+  business,
+  selectedMonth,
+  setSelectedMonth,
+  setActive,
+}: {
+  business: BusinessState;
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+  setActive: (view: string) => void;
+}) {
   const availableYears = Array.from(new Set([
     selectedMonth.slice(0, 4),
     ...business.sales.flatMap((sale) => [
@@ -4150,7 +4162,9 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
   const monthly = months.map((month) => ({ month, metrics: buildBusinessMetrics(business, month) }));
   const yearMetrics = monthly.reduce(
     (total, item) => ({
+      closed: total.closed + item.metrics.closed,
       received: total.received + item.metrics.received,
+      netRevenue: total.netRevenue + item.metrics.netRevenue,
       expensesPaid: total.expensesPaid + item.metrics.expensesPaid,
       proLabore: total.proLabore + item.metrics.proLabore,
       bonus: total.bonus + item.metrics.bonus,
@@ -4158,9 +4172,9 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
       saved: total.saved + item.metrics.saved,
       profit: total.profit + item.metrics.profit,
     }),
-    { received: 0, expensesPaid: 0, proLabore: 0, bonus: 0, fees: 0, saved: 0, profit: 0 },
+    { closed: 0, received: 0, netRevenue: 0, expensesPaid: 0, proLabore: 0, bonus: 0, fees: 0, saved: 0, profit: 0 },
   );
-  const maxMonthly = Math.max(1, ...monthly.map((item) => Math.max(item.metrics.received, item.metrics.expensesPaid + item.metrics.proLabore + item.metrics.bonus + item.metrics.fees + item.metrics.saved)));
+  const maxMonthly = Math.max(1, ...monthly.map((item) => Math.max(item.metrics.closed, item.metrics.netRevenue)));
   const categoryTotals = business.categories
     .map((category) => {
       const total = sum(
@@ -4178,7 +4192,8 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
     .sort((a, b) => b.total - a.total);
   const maxCategory = Math.max(1, ...categoryTotals.map((category) => category.total));
   const taxTotal = categoryTotals.find((category) => normalizeCategoryName(category.name) === "impostos")?.total ?? 0;
-  const softwareTotal = categoryTotals.find((category) => normalizeCategoryName(category.name) === "softwares")?.total ?? 0;
+  const yearReserveSaved = sum(monthly, (item) => item.metrics.reserveSaved);
+  const yearInvested = sum(monthly, (item) => item.metrics.invested);
 
   return (
     <div className="space-y-4">
@@ -4196,11 +4211,11 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
         </label>
       </Card>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <BusinessMetricCard label="Recebido no ano" value={formatCurrency(yearMetrics.received)} helper="Valores que entraram na conta" icon={Wallet} />
-        <BusinessMetricCard label="Saídas pagas" value={formatCurrency(yearMetrics.expensesPaid)} helper="Despesas operacionais" icon={ReceiptText} tone="blue" />
-        <BusinessMetricCard label="Lucro no ano" value={formatCurrency(yearMetrics.profit)} helper="Após custos, taxas e valores guardados" icon={TrendingUp} />
-        <BusinessMetricCard label="Impostos" value={formatCurrency(taxTotal)} helper="Pago no ano pela categoria" icon={BadgeDollarSign} tone="amber" />
-        <BusinessMetricCard label="Guardado" value={formatCurrency(yearMetrics.saved)} helper={`Softwares: ${formatCurrency(softwareTotal)}`} icon={PiggyBank} tone="dark" />
+        <BusinessMetricCard label="Faturamento bruto" value={formatCurrency(yearMetrics.closed)} helper="Tudo que foi fechado no ano" icon={BadgeDollarSign} />
+        <BusinessMetricCard label="Faturamento líquido" value={formatCurrency(yearMetrics.netRevenue)} helper="Recebido menos taxas" icon={Wallet} tone="blue" />
+        <BusinessMetricCard label="Lucro no ano" value={formatCurrency(yearMetrics.profit)} helper="Após saídas, salários e guardados" icon={TrendingUp} />
+        <BusinessMetricCard label="Taxas" value={formatCurrency(yearMetrics.fees + taxTotal)} helper="Cartão e impostos pagos" icon={ReceiptText} tone="amber" />
+        <BusinessMetricCard label="Guardado" value={formatCurrency(yearMetrics.saved)} helper={`Reserva ${formatCurrency(yearReserveSaved)} • Investido ${formatCurrency(yearInvested)}`} icon={PiggyBank} tone="dark" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
@@ -4208,32 +4223,43 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Evolução mensal</p>
-              <h3 className="mt-2 text-lg font-extrabold">Recebido x custo total</h3>
+              <h3 className="mt-2 text-lg font-extrabold">Bruto x líquido</h3>
             </div>
-            <p className="text-xs font-bold text-[var(--muted)]">Custo inclui saídas, pró-labore, bônus, taxas e dinheiro guardado.</p>
+            <p className="text-xs font-bold text-[var(--muted)]">Bruto é o fechado. Líquido é o que entrou depois das taxas.</p>
           </div>
           <div className="mt-5 space-y-3">
             {monthly.map(({ month, metrics }) => {
-              const outflow = metrics.expensesPaid + metrics.proLabore + metrics.bonus + metrics.fees + metrics.saved;
               return (
                 <div key={month} className="grid gap-2 sm:grid-cols-[92px_1fr_110px] sm:items-center">
-                  <p className="text-xs font-black">{monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMonth(month);
+                      setActive("Vendas");
+                    }}
+                    className="text-left text-xs font-black underline-offset-4 transition hover:text-emerald-700 hover:underline"
+                  >
+                    {monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}
+                  </button>
                   <div className="space-y-1.5">
                     <div className="h-2.5 overflow-hidden rounded-full bg-[#0f766e]/10">
-                      <div className="h-full rounded-full bg-[#0f766e]" style={{ width: `${Math.max(2, (metrics.received / maxMonthly) * 100)}%` }} />
+                      <div className="h-full rounded-full bg-[#0f766e]" style={{ width: `${metrics.closed > 0 ? Math.max(2, (metrics.closed / maxMonthly) * 100) : 0}%` }} />
                     </div>
                     <div className="h-2.5 overflow-hidden rounded-full bg-emerald-700/10">
-                      <div className="h-full rounded-full bg-emerald-300" style={{ width: `${Math.max(2, (outflow / maxMonthly) * 100)}%` }} />
+                      <div className="h-full rounded-full bg-emerald-300" style={{ width: `${metrics.netRevenue > 0 ? Math.max(2, (metrics.netRevenue / maxMonthly) * 100) : 0}%` }} />
                     </div>
                   </div>
-                  <p className={`text-xs font-black ${metrics.profit >= 0 ? "text-emerald-700 dark:text-emerald-200" : "text-red-600"}`}>{formatCurrency(metrics.profit)}</p>
+                  <div className="text-right">
+                    <p className="text-xs font-black text-emerald-700 dark:text-emerald-200">{formatCurrency(metrics.closed)}</p>
+                    <p className="text-[10px] font-bold text-[var(--muted)]">líq. {formatCurrency(metrics.netRevenue)}</p>
+                  </div>
                 </div>
               );
             })}
           </div>
           <div className="mt-5 flex flex-wrap gap-4 text-[11px] font-bold text-[var(--muted)]">
-            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#0f766e]" />Recebido</span>
-            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />Custo total</span>
+            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#0f766e]" />Bruto</span>
+            <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />Líquido</span>
           </div>
         </Card>
 
@@ -4269,8 +4295,8 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Tabela executiva</p>
         <div className="mt-4 overflow-x-auto">
           <div className="min-w-[860px] overflow-hidden rounded-2xl border border-[var(--line)]">
-            <div className="grid grid-cols-[120px_repeat(8,1fr)] bg-[#0f766e] px-3 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-white">
-              {["Mês", "Fechado", "Recebido", "Aberto", "Saiu", "Salários", "Taxas", "Guardado", "Lucro"].map((label) => <span key={label}>{label}</span>)}
+            <div className="grid grid-cols-[120px_repeat(9,1fr)] bg-[#0f766e] px-3 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-white">
+              {["Mês", "Bruto", "Recebido", "Taxas", "Líquido", "Aberto", "Saiu", "Salários", "Guardado", "Lucro"].map((label) => <span key={label}>{label}</span>)}
             </div>
             {monthly.map(({ month, metrics }) => {
               const openTotal = sum(
@@ -4278,14 +4304,24 @@ function BusinessBalanceView({ business, selectedMonth }: { business: BusinessSt
                 ({ installment }) => Math.max(0, installment.amount - (installment.receivedAmount ?? 0)),
               );
               return (
-                <div key={month} className="grid grid-cols-[120px_repeat(8,1fr)] border-t border-[var(--line)] px-3 py-3 text-xs font-bold">
-                  <span className="font-black">{monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}</span>
+                <div key={month} className="grid grid-cols-[120px_repeat(9,1fr)] border-t border-[var(--line)] px-3 py-3 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMonth(month);
+                      setActive("Vendas");
+                    }}
+                    className="text-left font-black underline-offset-4 transition hover:text-emerald-700 hover:underline"
+                  >
+                    {monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}
+                  </button>
                   <span>{formatCurrency(metrics.closed)}</span>
                   <span>{formatCurrency(metrics.received)}</span>
+                  <span>{formatCurrency(metrics.fees)}</span>
+                  <span>{formatCurrency(metrics.netRevenue)}</span>
                   <span>{formatCurrency(openTotal)}</span>
                   <span>{formatCurrency(metrics.expensesPaid)}</span>
                   <span>{formatCurrency(metrics.proLabore + metrics.bonus)}</span>
-                  <span>{formatCurrency(metrics.fees)}</span>
                   <span>{formatCurrency(metrics.saved)}</span>
                   <span className={metrics.profit >= 0 ? "text-emerald-700 dark:text-emerald-200" : "text-red-600"}>{formatCurrency(metrics.profit)}</span>
                 </div>
@@ -9686,7 +9722,7 @@ function ActiveView({
       return <BusinessInvestmentsView business={business} selectedMonth={selectedMonth} onOpenInvestment={onOpenBusinessInvestment} />;
     }
     if (active === "Balanço") {
-      return <BusinessBalanceView business={business} selectedMonth={selectedMonth} />;
+      return <BusinessBalanceView business={business} selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} setActive={setActive} />;
     }
   }
 
