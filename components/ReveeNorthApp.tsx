@@ -3157,6 +3157,7 @@ function StatusPill({ status }: { status: BillStatus }) {
 
 function BillsView({
   bills,
+  paymentHistoryBills = [],
   onStartPayment,
   onOpenBill,
   onDeleteBills,
@@ -3164,6 +3165,7 @@ function BillsView({
   categories,
 }: {
   bills: Bill[];
+  paymentHistoryBills?: Bill[];
   onStartPayment: (bill: Bill) => void;
   onOpenBill: (bill: Bill) => void;
   onDeleteBills: (ids: number[]) => void;
@@ -3198,12 +3200,21 @@ function BillsView({
   const regularBills = [...pendingBills, ...completedBills];
   const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
-  const totalPaid = sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount);
-  const totalMissing = sum(pendingOrOverdueBills, (bill) => bill.expectedAmount);
-  const totalOverall = totalPaid + totalMissing;
   const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill.id));
   const selectedTotal = sum(selectedBills, (bill) => bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount);
   const allFilteredSelected = filteredBills.length > 0 && filteredBills.every((bill) => selectedBillIds.includes(bill.id));
+  const paymentHistory = paymentHistoryBills
+    .filter((bill) => bill.status === "paga" && bill.paidDate)
+    .sort((a, b) => String(b.paidDate).localeCompare(String(a.paidDate)) || a.name.localeCompare(b.name, "pt-BR"));
+  const paidBillIds = new Set(paidBills.map((bill) => bill.id));
+  const paidThisMonth = [
+    ...paidBills,
+    ...paymentHistory.filter((bill) => !paidBillIds.has(bill.id)),
+  ];
+  const totalPaid = sum(paidThisMonth, (bill) => bill.paidAmount ?? bill.expectedAmount);
+  const totalMissing = sum(pendingOrOverdueBills, (bill) => bill.expectedAmount);
+  const totalOverall = totalPaid + totalMissing;
+  const paymentHistoryTotal = sum(paymentHistory, (bill) => bill.paidAmount ?? bill.expectedAmount);
   const toggleBillSelection = (id: number) => {
     setSelectedBillIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
@@ -3211,7 +3222,7 @@ function BillsView({
   };
   const summaryItems = [
     { label: "Total geral", value: formatCurrency(totalOverall), helper: `${bills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
-    { label: "Já pago", value: formatCurrency(totalPaid), helper: `${paidBills.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-[#0f766e]/16 text-[#0f766e]" },
+    { label: "Já pago", value: formatCurrency(totalPaid), helper: `${paidThisMonth.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-[#0f766e]/16 text-[#0f766e]" },
     { label: "Falta pagar", value: formatCurrency(totalMissing), helper: `${pendingOrOverdueBills.length} conta(s) abertas`, icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
   ];
 
@@ -3484,6 +3495,45 @@ function BillsView({
           Nenhuma conta encontrada neste filtro.
         </Card>
       ) : null}
+
+      <Card className="p-5 lg:p-6">
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#d75c27]">Histórico de pagamentos</p>
+            <h3 className="mt-1 text-lg font-extrabold">Tudo que saiu da conta neste mês.</h3>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+              Inclui contas atrasadas pagas agora, mesmo que o vencimento fosse de outro mês.
+            </p>
+          </div>
+          <p className="text-sm font-black text-[#d75c27]">{formatCurrency(paymentHistoryTotal)}</p>
+        </div>
+        <div className="divide-y divide-[#211d19]/8 dark:divide-white/10">
+          {paymentHistory.map((bill) => (
+            <button
+              type="button"
+              key={`paid-history-${bill.id}`}
+              onClick={() => onOpenBill(bill)}
+              className="grid w-full gap-3 py-3 text-left md:grid-cols-[1fr_130px_130px_130px] md:items-center"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <CategoryBadgeIcon categoryName={bill.category} categories={categories} logoUrl={bill.logoUrl} />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-extrabold">{bill.name}</span>
+                  <span className="block truncate text-xs font-semibold text-[var(--muted)]">{bill.category}</span>
+                </span>
+              </span>
+              <Field label="Pago em" value={formatDate(bill.paidDate ?? bill.dueDate)} />
+              <Field label="Vencia em" value={formatDate(bill.dueDate)} />
+              <Field label="Valor" value={formatCurrency(bill.paidAmount ?? bill.expectedAmount)} />
+            </button>
+          ))}
+          {!paymentHistory.length ? (
+            <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-5 text-sm font-semibold text-[var(--muted)] dark:bg-white/6">
+              Nenhum pagamento registrado neste mês ainda.
+            </p>
+          ) : null}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -9707,6 +9757,7 @@ function ActiveView({
       return (
         <BillsView
           bills={buildVisibleBills(business.expenses, selectedMonth)}
+          paymentHistoryBills={business.expenses.filter((bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === selectedMonth)}
           onStartPayment={onStartPayment}
           onOpenBill={onOpenBill}
           onDeleteBills={onDeleteBills}
@@ -9749,6 +9800,7 @@ function ActiveView({
     return (
       <BillsView
         bills={data.bills}
+        paymentHistoryBills={allBills.filter((bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === selectedMonth)}
         onStartPayment={onStartPayment}
         onOpenBill={onOpenBill}
         onDeleteBills={onDeleteBills}
