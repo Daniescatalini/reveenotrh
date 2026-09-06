@@ -259,10 +259,12 @@ type MonthData = {
   selectedMonth: string;
   incomes: Income[];
   bills: Bill[];
+  paidThisMonthBills: Bill[];
   variableExpenses: VariableExpense[];
   goals: Goal[];
   objectives: MonthlyObjective[];
   previousBills: Bill[];
+  previousPaidBills: Bill[];
   previousIncomes: Income[];
   previousVariableExpenses: VariableExpense[];
 };
@@ -1149,7 +1151,7 @@ function mergeDefaultCategories(current: Category[]) {
 }
 
 function buildMetrics(data: MonthData) {
-  const paidBills = data.bills.filter((bill) => bill.status === "paga");
+  const paidBills = data.paidThisMonthBills;
   const activeVariableExpenses = data.variableExpenses.filter((expense) => !expense.ignored);
   const pendingBills = data.bills.filter((bill) => bill.status === "pendente").sort(sortByPaymentPriority);
   const overdueBills = data.bills.filter((bill) => bill.status === "atrasada").sort(sortByPaymentPriority);
@@ -1180,10 +1182,8 @@ function buildMetrics(data: MonthData) {
     totalOut + totalPending + totalOverdue + reserveDestination + goalsDestination + freeDestination,
   );
   const unassignedValue = Math.max(0, totalIncome - totalDirected);
-  const previousPaid = sum(
-    data.previousBills.filter((bill) => bill.status === "paga"),
-    (bill) => bill.paidAmount ?? bill.expectedAmount,
-  );
+  const previousPaidBills = data.previousPaidBills;
+  const previousPaid = sum(previousPaidBills, (bill) => bill.paidAmount ?? bill.expectedAmount);
   const previousVariableExpenses = sum(
     data.previousVariableExpenses.filter((expense) => !expense.ignored),
     (expense) => expense.amount,
@@ -1274,14 +1274,22 @@ function buildMonthDataFromLists(
   variableExpenses: VariableExpense[] = [],
 ) {
   const previousMonth = addMonths(selectedMonth, -1);
+  const paidThisMonthBills = bills
+    .filter((bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === selectedMonth)
+    .map((bill) => normalizeBillStatus(bill));
+  const previousPaidBills = bills
+    .filter((bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === previousMonth)
+    .map((bill) => normalizeBillStatus(bill));
   return {
     selectedMonth,
     incomes: incomes.filter((income) => monthKey(income.receivedDate) === selectedMonth),
     bills: buildVisibleBills(bills, selectedMonth),
+    paidThisMonthBills,
     variableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === selectedMonth),
     goals,
     objectives,
     previousBills: bills.filter((bill) => monthKey(bill.dueDate) === previousMonth).map((bill) => normalizeBillStatus(bill)),
+    previousPaidBills,
     previousIncomes: incomes.filter((income) => monthKey(income.receivedDate) === previousMonth),
     previousVariableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === previousMonth),
   };
@@ -1306,6 +1314,12 @@ function buildPeriodMonthData(
       return month >= fromMonth && month <= toMonth;
     })
     .map((bill) => normalizeBillStatus(bill));
+  const paidThisMonthBills = bills
+    .filter((bill) => {
+      const month = monthKey(bill.paidDate ?? bill.dueDate);
+      return bill.status === "paga" && month >= fromMonth && month <= toMonth;
+    })
+    .map((bill) => normalizeBillStatus(bill));
   const periodVariableExpenses = variableExpenses.filter((expense) => {
     const month = monthKey(expense.date);
     return month >= fromMonth && month <= toMonth;
@@ -1322,6 +1336,12 @@ function buildPeriodMonthData(
       return month >= previousStart && month <= previousEnd;
     })
     .map((bill) => normalizeBillStatus(bill));
+  const previousPaidBills = bills
+    .filter((bill) => {
+      const month = monthKey(bill.paidDate ?? bill.dueDate);
+      return bill.status === "paga" && month >= previousStart && month <= previousEnd;
+    })
+    .map((bill) => normalizeBillStatus(bill));
   const previousIncomes = incomes.filter((income) => {
     const month = monthKey(income.receivedDate);
     return month >= previousStart && month <= previousEnd;
@@ -1334,10 +1354,12 @@ function buildPeriodMonthData(
     selectedMonth: toMonth,
     incomes: periodIncomes,
     bills: periodBills,
+    paidThisMonthBills,
     variableExpenses: periodVariableExpenses,
     goals: periodGoals.length ? periodGoals : goals,
     objectives: [],
     previousBills,
+    previousPaidBills,
     previousIncomes,
     previousVariableExpenses,
   };
@@ -10551,27 +10573,14 @@ export default function ReveeNorthApp() {
   };
 
   const data = useMemo<MonthData>(() => {
-    const selectedDate = new Date(`${selectedMonth}-01T12:00:00`);
-    const previousDate = new Date(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth() - 1,
-      1,
-    );
-    const previousMonth = `${previousDate.getFullYear()}-${String(
-      previousDate.getMonth() + 1,
-    ).padStart(2, "0")}`;
-
-    return {
+    return buildMonthDataFromLists(
       selectedMonth,
-      bills: buildVisibleBills(bills, selectedMonth),
-      incomes: incomes.filter((income) => monthKey(income.receivedDate) === selectedMonth),
-      variableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === selectedMonth),
+      incomes,
+      bills,
       goals,
-      objectives: objectives.filter((objective) => objective.month === selectedMonth),
-      previousBills: bills.filter((bill) => monthKey(bill.dueDate) === previousMonth),
-      previousIncomes: incomes.filter((income) => monthKey(income.receivedDate) === previousMonth),
-      previousVariableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === previousMonth),
-    };
+      objectives.filter((objective) => objective.month === selectedMonth),
+      variableExpenses,
+    );
   }, [bills, goals, incomes, objectives, selectedMonth, variableExpenses]);
 
   const metrics = useMemo(() => buildMetrics(data), [data]);
