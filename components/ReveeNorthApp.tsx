@@ -1462,6 +1462,18 @@ function calculateNorthScore(metrics: ReturnType<typeof buildMetrics>, goals: Go
   return Math.max(0, Math.min(100, 44 + incomeBonus + paidBonus + onTimeBonus + reserveProgress + goalProgress + balanceBonus - overduePenalty - latePaymentPenalty - pendingPenalty - freeMoneyPenalty));
 }
 
+function buildVariableExpenseLeaders(expenses: VariableExpense[], categories: Category[]) {
+  return Object.values(expenses.reduce<Record<string, { label: string; total: number; count: number }>>((acc, expense) => {
+    const category = findCategory(categories, expense.category, "variavel");
+    const label = category?.name ?? expense.category;
+    const key = normalizeCategoryName(label);
+    acc[key] = acc[key] ?? { label, total: 0, count: 0 };
+    acc[key].total += expense.amount;
+    acc[key].count += 1;
+    return acc;
+  }, {})).sort((a, b) => b.total - a.total);
+}
+
 function buildAchievements(data: MonthData, metrics: ReturnType<typeof buildMetrics>): Achievement[] {
   const today = getReferenceDate(data.selectedMonth);
   const paidCount = metrics.paidBills.length;
@@ -2920,23 +2932,39 @@ function Dashboard({
     const name = metrics.urgent?.name ?? "a próxima pendência";
     const dateText = urgentDay ? `até dia ${urgentDay}` : "com calma hoje";
     const free = formatCurrency(metrics.unassignedValue);
-    const variants = [
-      {
-        headline: "Sua próxima decisão constrói seu futuro.",
-        body: `Dani, quite ${name} ${dateText}. Depois, olhe para os ${free} livres para decidir e escolha um destino que deixe seu mês mais leve.`,
-      },
-      {
-        headline: "Um passo certo já muda o mês.",
-        body: `A prioridade agora é resolver ${name}. Você não precisa organizar tudo hoje, só tirar da frente o que mais pesa no planejamento.`,
-      },
-      {
-        headline: "Menos pendência, mais clareza.",
-        body: `Pagar ${name} ${dateText} reduz risco de juros e ajuda seu North Score continuar acima de 80.`,
-      },
-    ];
-    const index = (new Date().getDate() + metrics.overdueBills.length + metrics.pendingBills.length) % variants.length;
-    return variants[index];
-  }, [metrics.overdueBills.length, metrics.pendingBills.length, metrics.unassignedValue, metrics.urgent?.name, urgentDay]);
+    const topVariable = buildVariableExpenseLeaders(metrics.variableExpenses, categories)[0];
+    const totalOut = metrics.totalOut;
+    const outRatio = metrics.totalIncome ? totalOut / metrics.totalIncome : 0;
+
+    if (metrics.overdueBills.length) {
+      return {
+        headline: "Primeiro, tirar peso do caminho.",
+        body: `Dani, a prioridade é resolver ${name}. Existem ${metrics.overdueBills.length} conta(s) atrasada(s), somando ${formatCurrency(metrics.totalOverdue)}. Depois disso, o saldo e os gastos variáveis ficam muito mais claros.`,
+      };
+    }
+    if (outRatio > 0.9 && topVariable) {
+      return {
+        headline: "Seu dinheiro está saindo rápido.",
+        body: `Entrou ${formatCurrency(metrics.totalIncome)} e saiu ${formatCurrency(totalOut)}. O maior gasto variável foi ${topVariable.label}, com ${formatCurrency(topVariable.total)}. Hoje o melhor ajuste é reduzir esse grupo antes de assumir novas compras.`,
+      };
+    }
+    if (metrics.pendingBills.length) {
+      return {
+        headline: "Separe o compromisso antes da escolha.",
+        body: `Você tem ${metrics.pendingBills.length} conta(s) ainda abertas, somando ${formatCurrency(metrics.totalPending)}. Reserve esse valor primeiro; depois use os ${free} livres para decidir com mais segurança.`,
+      };
+    }
+    if (metrics.reserveDestination <= 0) {
+      return {
+        headline: "O próximo avanço é criar respiro.",
+        body: `Sem contas atrasadas agora. A melhor próxima decisão é começar a reserva, mesmo pequena, e acompanhar os gastos variáveis para não deixar mercado, iFood ou combustível comerem a folga.`,
+      };
+    }
+    return {
+      headline: "Seu mês está sob controle.",
+      body: `Você registrou ${formatCurrency(metrics.totalIncome)} em entradas, ${formatCurrency(metrics.totalPaid)} em contas pagas e ${formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis. Próximo passo: manter a reserva e revisar ${topVariable?.label ?? "os gastos variáveis"}.`,
+    };
+  }, [categories, metrics.pendingBills.length, metrics.reserveDestination, metrics.totalIncome, metrics.totalOut, metrics.totalOverdue, metrics.totalPaid, metrics.totalPending, metrics.totalVariableExpenses, metrics.unassignedValue, metrics.urgent?.name, metrics.variableExpenses, metrics.overdueBills.length, urgentDay]);
 
   return (
     <div className="space-y-5">
@@ -4198,7 +4226,10 @@ function PersonalBalanceView({
             <div className="flex justify-between gap-3"><span>Contas pagas</span><span className="text-[#d75c27]">{formatCurrency(totalPaidBills)}</span></div>
             <div className="flex justify-between gap-3"><span>Gastos variáveis</span><span className="text-[#d75c27]">{formatCurrency(totalVariable)}</span></div>
             <div className="h-px bg-[#211d19]/8 dark:bg-white/10" />
-            <div className="flex justify-between gap-3 text-base font-black"><span>Saldo do ano</span><span>{formatCurrency(totalIncome - totalOut)}</span></div>
+            <div className="flex justify-between gap-3 text-base font-black"><span>Sobra contábil do ano</span><span>{formatCurrency(totalIncome - totalOut)}</span></div>
+            <p className="text-[11px] font-semibold leading-5 text-[var(--muted)]">
+              Isso é entrou menos saiu. Dinheiro guardado de verdade aparece em metas/reserva.
+            </p>
           </div>
         </Card>
       </div>
@@ -8710,6 +8741,7 @@ function NorthIADrawer({
   checkup,
   metrics,
   nextMonthAdvice,
+  categories,
 }: {
   open: boolean;
   onClose: () => void;
@@ -8717,6 +8749,7 @@ function NorthIADrawer({
   checkup: Checkup;
   metrics: ReturnType<typeof buildMetrics>;
   nextMonthAdvice: string;
+  categories: Category[];
 }) {
   const [answer, setAnswer] = useState("");
   const [question, setQuestion] = useState("");
@@ -8728,6 +8761,11 @@ function NorthIADrawer({
   const paidLateAverage = metrics.paidLateBills.length
     ? Math.round(sum(metrics.paidLateBills, paidLateDays) / metrics.paidLateBills.length)
     : 0;
+  const variableLeaders = buildVariableExpenseLeaders(metrics.variableExpenses, categories);
+  const topVariable = variableLeaders[0];
+  const topThreeVariables = variableLeaders.slice(0, 3);
+  const outRatio = metrics.totalIncome ? metrics.totalOut / metrics.totalIncome : 0;
+  const financialSnapshot = `Entrou ${formatCurrency(metrics.totalIncome)}, saiu ${formatCurrency(metrics.totalOut)} (${formatCurrency(metrics.totalPaid)} em contas pagas e ${formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis), faltam ${formatCurrency(metrics.totalMissing)} em contas abertas e o saldo previsto é ${formatCurrency(metrics.projectedBalance)}.`;
   const extractAmount = (text: string) => {
     const match = text.match(/(?:r\$|\$)?\s*(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{1,2}))?/i);
     if (!match) return 0;
@@ -8743,8 +8781,8 @@ function NorthIADrawer({
 
     if (normalized.includes("pagar") || normalized.includes("primeiro") || normalized.includes("prioridade")) {
       return firstPriority
-        ? `Minha orientação é pagar primeiro ${urgentText}. Depois resolva as outras contas em atraso, da mais antiga para a mais recente, e só então as próximas a vencer. Isso protege seu North Score e reduz risco de juros.`
-        : "Você não tem contas pendentes agora. A próxima decisão pode ser guardar uma parte em reserva ou acelerar uma meta importante.";
+        ? `Minha orientação é pagar primeiro ${urgentText}. Depois resolva as outras contas em atraso, da mais antiga para a mais recente, e só então as próximas a vencer. ${financialSnapshot}`
+        : `Você não tem contas pendentes agora. A próxima decisão pode ser guardar uma parte em reserva ou acelerar uma meta importante. ${financialSnapshot}`;
     }
 
     if (purchaseIntent) {
@@ -8761,18 +8799,27 @@ function NorthIADrawer({
       return `${priceText}Pelo cenário atual, essa compra parece possível se ficar dentro de ${formatCurrency(freeToDecide)} e não competir com reserva ou metas. Minha sugestão: compre à vista se couber; evite parcelar algo que reduza sua folga dos próximos meses.`;
     }
 
+    if (normalized.includes("gasto") || normalized.includes("categoria") || normalized.includes("ifood") || normalized.includes("mercado")) {
+      if (!topVariable) return "Ainda não há gastos variáveis ativos neste mês para analisar. Quando tiver mercado, iFood, combustível ou compras, eu separo por categoria e mostro onde está pesando mais.";
+      return `Nos gastos variáveis, o maior ponto é ${topVariable.label}: ${formatCurrency(topVariable.total)} em ${topVariable.count} lançamento(s). Top categorias: ${topThreeVariables.map((item) => `${item.label} ${formatCurrency(item.total)}`).join("; ")}. Isso fica separado das contas fixas, então não duplica água, luz, IPTU ou condomínio.`;
+    }
+
     if (normalized.includes("mes") || normalized.includes("diagnostico") || normalized.includes("relatorio")) {
-      return `${checkup.title}. ${checkup.summary} Você tem ${metrics.overdueBills.length} conta(s) atrasada(s), ${metrics.pendingBills.length} pendente(s), ${metrics.paidBills.length} paga(s) e ${formatCurrency(freeToDecide)} livre para decidir. ${metrics.paidLateBills.length ? `Você pagou ${metrics.paidLateBills.length} conta(s) com atraso médio de ${paidLateAverage} dia(s).` : "As contas pagas não registraram atraso."}`;
+      return `${checkup.title}. ${checkup.summary} ${financialSnapshot} ${topVariable ? `Maior gasto variável: ${topVariable.label}, ${formatCurrency(topVariable.total)}.` : "Sem gasto variável ativo no mês."} ${metrics.paidLateBills.length ? `Você pagou ${metrics.paidLateBills.length} conta(s) com atraso médio de ${paidLateAverage} dia(s).` : "As contas pagas não registraram atraso."}`;
     }
 
     if (normalized.includes("reserva") || normalized.includes("guardar") || normalized.includes("meta")) {
       if (metrics.overdueBills.length) {
         return `Antes de guardar mais, eu priorizaria as contas atrasadas: são ${formatCurrency(metrics.totalOverdue)} em aberto e ${totalLateDays} dia(s) de atraso acumulado. Depois disso, guardar uma parte fica muito mais saudável.`;
       }
-      return `Você pode guardar uma parte do valor livre: hoje há ${formatCurrency(freeToDecide)} para decidir. Eu começaria com uma reserva pequena e constante, sem comprometer contas pendentes.`;
+      return `Você pode guardar uma parte do valor livre: hoje há ${formatCurrency(freeToDecide)} para decidir. Eu começaria com uma reserva pequena e constante, sem comprometer contas pendentes nem esconder gastos variáveis.`;
     }
 
-    return `Olhei seu mês por três sinais: compromissos, atraso e folga. Hoje você tem ${metrics.overdueBills.length} atrasada(s), ${metrics.pendingBills.length} pendente(s), ${formatCurrency(metrics.totalPaid)} em contas pagas, ${formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis e ${formatCurrency(freeToDecide)} livre para decidir. ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
+    if (normalized.includes("score") || normalized.includes("saude") || normalized.includes("saúde")) {
+      return `O North Score considera seis sinais: entradas registradas, contas pagas, contas atrasadas, contas pendentes, reserva/metas e saldo previsto. Agora ele também enxerga saídas reais com gastos variáveis. Seu cenário: ${financialSnapshot}`;
+    }
+
+    return `Olhei seu mês por entradas, contas, atrasos, gastos variáveis, reserva, metas e saldo. ${financialSnapshot} ${topVariable ? `O maior gasto variável é ${topVariable.label}.` : ""} ${outRatio > 0.9 ? "Atenção: as saídas estão muito próximas das entradas." : ""} ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
   };
   const submitQuestion = (text = question) => {
     const clean = text.trim();
@@ -8783,11 +8830,14 @@ function NorthIADrawer({
     setQuestion("");
   };
   const answers: Record<string, string> = {
-    "Tenho dinheiro livre?": "Você possui valor livre para decidir, mas a melhor ordem é quitar compromissos essenciais antes de aumentar gastos flexíveis.",
+    "Tenho dinheiro livre?": `${financialSnapshot} O valor livre seguro é ${formatCurrency(freeToDecide)}, mas ele só deve ser usado depois de separar contas abertas e prioridades.`,
     "Qual conta devo pagar primeiro?": firstPriority
       ? `${firstPriority.name} deve vir primeiro. ${firstPriority.status === "atrasada" ? `Ela está ${overdueLabel(firstPriority)} e venceu em ${formatDate(firstPriority.dueDate)}.` : `Ela vence em ${formatDate(firstPriority.dueDate)}.`} Depois, siga pelas outras atrasadas mais antigas e só então pelas próximas a vencer.`
       : "Você não tem contas pendentes agora. A próxima decisão pode ser reforçar reserva ou metas.",
-    "Como foi meu mês?": `${checkup.title}. ${checkup.summary} Pontos positivos: ${checkup.positives.join(" ")} Pontos de atenção: ${checkup.attentions.join(" ")} ${checkup.focus}`,
+    "Como foi meu mês?": `${checkup.title}. ${checkup.summary} ${financialSnapshot} ${topVariable ? `Maior gasto variável: ${topVariable.label}, ${formatCurrency(topVariable.total)}.` : "Sem gasto variável ativo no mês."} Pontos de atenção: ${checkup.attentions.join(" ")}`,
+    "Onde gastei mais?": topVariable
+      ? `Seu maior gasto variável foi ${topVariable.label}, com ${formatCurrency(topVariable.total)} em ${topVariable.count} lançamento(s). Top categorias: ${topThreeVariables.map((item) => `${item.label} ${formatCurrency(item.total)}`).join("; ")}.`
+      : "Ainda não há gastos variáveis ativos neste mês para comparar.",
     "Como melhorar o próximo mês?": nextMonthAdvice,
   };
   const resetAnswer = () => {
@@ -12543,6 +12593,7 @@ export default function ReveeNorthApp() {
         checkup={checkup}
         metrics={metrics}
         nextMonthAdvice={nextMonthAdvice}
+        categories={categories}
       />
       {feedbackToast ? <FeedbackToastView toast={feedbackToast} /> : null}
     </main>
