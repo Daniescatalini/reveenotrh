@@ -572,11 +572,15 @@ function findCategory(categories: Category[], name: string, type?: Category["typ
 }
 
 function displayIncomeCategory(income: Income) {
+  const category = normalizeCategoryName(income.category);
+  if (category === "bonus") return "Bônus";
+  if (category === "salario mensal") return "Salário mensal";
+  if (category === "renda extra") return "Renda extra";
   const text = normalizeCategoryName(`${income.name} ${income.source} ${income.category} ${income.note}`);
   if (text.includes("flavia") || text.includes("ivone")) return "Bônus";
   if (text.includes("uber") || text.includes("gustavo motta brandi")) return "Salário mensal";
-  if (normalizeCategoryName(income.category) === "trabalho gustavo") return "Renda extra";
-  if (normalizeCategoryName(income.category) === "uber") return "Salário mensal";
+  if (category === "trabalho gustavo") return "Renda extra";
+  if (category === "uber") return "Salário mensal";
   return income.category;
 }
 
@@ -1436,25 +1440,25 @@ function calculateNorthScore(metrics: ReturnType<typeof buildMetrics>, goals: Go
   const totalBills = Math.max(metrics.totalBills, 1);
   const totalLateDays = sum(metrics.overdueBills, (bill) => daysOverdue(bill));
   const totalPaidLateDays = sum(metrics.paidLateBills, paidLateDays);
-  const averageLateDays = metrics.overdueBills.length ? Math.round(totalLateDays / metrics.overdueBills.length) : 0;
+  const averageLateDays = metrics.overdueBills.length ? totalLateDays / metrics.overdueBills.length : 0;
   const onTimeRatio = metrics.paidOnTimeBills.length / totalBills;
-  const pendingRatio = metrics.pendingBills.length / totalBills;
+  const paidRatio = metrics.paidBills.length / totalBills;
   const goalProgress = goals.length
-    ? Math.min(16, Math.round((sum(goals, (goal) => goal.current) / Math.max(sum(goals, (goal) => goal.target), 1)) * 16))
+    ? Math.min(14, Math.round((sum(goals, (goal) => goal.current) / Math.max(sum(goals, (goal) => goal.target), 1)) * 14))
     : 0;
   const reserveGoal = goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
   const reserveProgress = reserveGoal
     ? Math.min(12, Math.round((reserveGoal.current / Math.max(reserveGoal.target, 1)) * 12))
     : 0;
-  const freeMoneyPenalty = metrics.unassignedValue > metrics.totalIncome * 0.18 ? 6 : metrics.unassignedValue > 0 ? 2 : 0;
-  const overduePenalty =
-    metrics.overdueBills.length * 13 +
-    Math.min(30, Math.round(totalLateDays * 0.75)) +
-    Math.min(18, averageLateDays);
-  const latePaymentPenalty = metrics.paidLateBills.length * 7 + Math.min(18, Math.round(totalPaidLateDays * 0.6));
-  const pendingPenalty = Math.round(pendingRatio * 12);
-  const onTimeBonus = Math.round(onTimeRatio * 18);
-  return Math.max(0, Math.min(100, 52 + onTimeBonus + reserveProgress + goalProgress - overduePenalty - latePaymentPenalty - pendingPenalty - freeMoneyPenalty));
+  const incomeBonus = metrics.totalIncome > 0 ? 8 : 0;
+  const paidBonus = Math.round(paidRatio * 16);
+  const onTimeBonus = Math.round(onTimeRatio * 12);
+  const balanceBonus = metrics.projectedBalance >= 0 ? 8 : -8;
+  const overduePenalty = metrics.overdueBills.length * 8 + Math.min(18, Math.round(averageLateDays * 0.45));
+  const latePaymentPenalty = metrics.paidLateBills.length * 3 + Math.min(10, Math.round(totalPaidLateDays * 0.18));
+  const pendingPenalty = Math.min(10, Math.round(metrics.pendingBills.length * 1.5));
+  const freeMoneyPenalty = metrics.unassignedValue > metrics.totalIncome * 0.25 ? 4 : 0;
+  return Math.max(0, Math.min(100, 44 + incomeBonus + paidBonus + onTimeBonus + reserveProgress + goalProgress + balanceBonus - overduePenalty - latePaymentPenalty - pendingPenalty - freeMoneyPenalty));
 }
 
 function buildAchievements(data: MonthData, metrics: ReturnType<typeof buildMetrics>): Achievement[] {
@@ -2797,18 +2801,30 @@ function FinancialHealthCard({
   const previous = 64;
   const circumference = 2 * Math.PI * 46;
   const dash = circumference - (score / 100) * circumference;
+  const totalBills = Math.max(metrics.totalBills, 1);
+  const paidPercent = Math.round((metrics.paidBills.length / totalBills) * 100);
+  const reserveGoal = goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
+  const reservePercent = reserveGoal ? Math.min(100, Math.round((reserveGoal.current / Math.max(reserveGoal.target, 1)) * 100)) : 0;
+  const balanceGood = metrics.projectedBalance >= 0;
+  const level = score >= 80 ? "Nível organizado" : score >= 55 ? "Nível em ajuste" : "Precisa de atenção";
+  const factorItems = [
+    { label: "Contas pagas", value: `${paidPercent}%`, tone: paidPercent >= 70 ? "text-emerald-600" : "text-[#d75c27]" },
+    { label: "Atrasadas", value: String(metrics.overdueBills.length), tone: metrics.overdueBills.length ? "text-red-600" : "text-emerald-600" },
+    { label: "Reserva", value: `${reservePercent}%`, tone: reservePercent ? "text-emerald-600" : "text-[#d75c27]" },
+    { label: "Saldo", value: balanceGood ? "ok" : "baixo", tone: balanceGood ? "text-emerald-600" : "text-red-600" },
+  ];
 
   return (
     <button
       type="button"
       onClick={onOpenRecommendation}
-      className="glass group rounded-[28px] p-5 text-left transition hover:-translate-y-0.5 hover:bg-white/78 dark:hover:bg-white/10"
+      className="glass group flex h-full flex-col rounded-[28px] p-5 text-left transition hover:-translate-y-0.5 hover:bg-white/78 dark:hover:bg-white/10"
     >
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d75c27]">
         Saúde financeira
       </p>
-      <div className="mt-5 grid gap-5 sm:grid-cols-[150px_1fr] sm:items-center">
-        <div className="relative h-32 w-32">
+      <div className="mt-4 grid gap-4 sm:grid-cols-[118px_1fr] sm:items-center">
+        <div className="relative h-28 w-28">
           <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
             <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(33,29,25,.09)" strokeWidth="12" />
             <circle
@@ -2829,23 +2845,35 @@ function FinancialHealthCard({
           </div>
         </div>
         <div>
-          <p className="text-base font-extrabold">Nível Organizado</p>
+          <p className="text-base font-extrabold">{level}</p>
           <p className="mt-1 text-sm font-bold text-emerald-600">
-            +{Math.max(0, score - previous)} pontos este mês
+            {score >= previous ? "+" : "-"}{Math.abs(score - previous)} pontos este mês
           </p>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
             <div className="h-full rounded-full bg-gradient-to-r from-[#d75c27] to-[#f0b59b]" style={{ width: `${score}%` }} />
           </div>
-          <p className="mt-3 text-sm font-semibold text-[var(--muted)]">Meta: 85 pontos</p>
-          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#d75c27]/8 p-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#d75c27]/12 text-[#d75c27]">
-              <Zap className="h-4 w-4" />
-            </span>
-            <span>
-              <span className="block text-xs font-bold text-[var(--muted)]">Próxima conquista</span>
-              <span className="block text-sm font-extrabold">Quitar {metrics.urgent?.name ?? "pendência"}</span>
-            </span>
+          <p className="mt-2 text-xs font-semibold leading-5 text-[var(--muted)]">
+            Olha entradas, saídas reais, contas abertas, atrasos, reserva e metas.
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 grid gap-2 sm:grid-cols-2">
+        {factorItems.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-[var(--line)] bg-white/45 px-3 py-2 dark:bg-white/6">
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--muted)]">{item.label}</p>
+            <p className={`mt-1 text-lg font-black ${item.tone}`}>{item.value}</p>
           </div>
+        ))}
+      </div>
+      <div className="mt-auto pt-4">
+        <div className="flex items-center gap-3 rounded-2xl bg-[#d75c27]/8 p-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#d75c27]/12 text-[#d75c27]">
+            <Zap className="h-4 w-4" />
+          </span>
+          <span>
+            <span className="block text-xs font-bold text-[var(--muted)]">Próximo foco</span>
+            <span className="block text-sm font-extrabold">{metrics.urgent ? `Quitar ${metrics.urgent.name}` : "Manter o mês em dia"}</span>
+          </span>
         </div>
       </div>
     </button>
