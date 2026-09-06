@@ -123,6 +123,7 @@ const navItems = [
   { label: "Metas", icon: Target },
   { label: "Objetivos do mês", icon: Flag },
   { label: "Planejamento", icon: LineChart },
+  { label: "Balanço", icon: BarChart3 },
   { label: "Relatórios", icon: FileText },
 ];
 
