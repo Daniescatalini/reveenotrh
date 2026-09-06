@@ -305,6 +305,7 @@ type NameCleanupDebt = {
   id: number;
   name: string;
   origin: string;
+  responsible?: string;
   originalAmount: number;
   currentAmount: number;
   status: "aberta" | "paga";
@@ -4639,15 +4640,24 @@ function DebtsView({
   onOpenDebt: (debt: NameCleanupDebt) => void;
   onPayDebt: (id: number) => void;
 }) {
+  const [responsibleFilter, setResponsibleFilter] = useState("todos");
+  const responsibleOptions = Array.from(
+    new Set(debts.map((debt) => debt.responsible?.trim()).filter(Boolean) as string[]),
+  ).sort((a, b) => a.localeCompare(b));
+  const visibleDebts = responsibleFilter === "todos"
+    ? debts
+    : debts.filter((debt) => (debt.responsible?.trim() || "Sem responsável") === responsibleFilter);
   const openDebts = debts
+    .filter((debt) => visibleDebts.includes(debt))
     .filter((debt) => debt.status === "aberta")
     .sort((a, b) => a.currentAmount - b.currentAmount);
   const paidDebts = debts
+    .filter((debt) => visibleDebts.includes(debt))
     .filter((debt) => debt.status === "paga")
     .sort((a, b) => String(b.paidAt ?? "").localeCompare(String(a.paidAt ?? "")));
   const totalOpen = sum(openDebts, (debt) => debt.currentAmount);
   const totalPaid = sum(paidDebts, (debt) => debt.paidAmount ?? debt.currentAmount);
-  const totalOriginal = sum(debts, (debt) => debt.originalAmount);
+  const totalOriginal = sum(visibleDebts, (debt) => debt.originalAmount);
 
   const summaryItems = [
     { label: "Aberto agora", value: formatCurrency(totalOpen), helper: `${openDebts.length} dívida(s) para negociar`, icon: CircleAlert, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
@@ -4684,14 +4694,30 @@ function DebtsView({
             <h3 className="mt-1 text-lg font-extrabold">Pague primeiro as menores dívidas.</h3>
             <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Ordem automática da mais barata para a mais cara pelo valor atualizado.</p>
           </div>
-          <button
-            type="button"
-            onClick={onNewDebt}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d75c27] px-4 py-2.5 text-xs font-extrabold text-white"
-          >
-            <Plus className="h-4 w-4" />
-            Nova dívida
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="block">
+              <span className="sr-only">Filtrar responsável</span>
+              <select
+                value={responsibleFilter}
+                onChange={(event) => setResponsibleFilter(event.target.value)}
+                className="h-11 rounded-2xl border border-[var(--line)] bg-white/70 px-4 text-xs font-extrabold outline-none focus:border-[#d75c27] dark:bg-white/8"
+              >
+                <option value="todos">Todos responsáveis</option>
+                {responsibleOptions.map((responsible) => (
+                  <option key={responsible} value={responsible}>{responsible}</option>
+                ))}
+                {debts.some((debt) => !debt.responsible?.trim()) ? <option value="Sem responsável">Sem responsável</option> : null}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={onNewDebt}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#d75c27] px-4 text-xs font-extrabold text-white"
+            >
+              <Plus className="h-4 w-4" />
+              Nova dívida
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 space-y-3">
@@ -4712,7 +4738,9 @@ function DebtsView({
                 </span>
                 <div className="min-w-0">
                   <h3 className="truncate text-base font-extrabold">{debt.name}</h3>
-                  <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{debt.origin}</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+                    {debt.origin} • {debt.responsible?.trim() || "Sem responsável"}
+                  </p>
                 </div>
               </div>
               <Field label="Valor real" value={formatCurrency(debt.originalAmount)} />
@@ -4751,7 +4779,9 @@ function DebtsView({
               >
                 <span>
                   <span className="block text-sm font-extrabold">{debt.name}</span>
-                  <span className="block text-xs font-semibold text-[var(--muted)]">{debt.origin}</span>
+                  <span className="block text-xs font-semibold text-[var(--muted)]">
+                    {debt.origin} • {debt.responsible?.trim() || "Sem responsável"}
+                  </span>
                 </span>
                 <span className="text-xs font-bold text-[var(--muted)]">{debt.paidAt ? formatDate(debt.paidAt) : "Pago"}</span>
                 <span className="text-sm font-black text-emerald-600">{formatCurrency(debt.paidAmount ?? debt.currentAmount)}</span>
@@ -5408,6 +5438,7 @@ function DebtModal({
       id: Date.now(),
       name: "",
       origin: "",
+      responsible: "",
       originalAmount: 0,
       currentAmount: 0,
       status: "aberta",
@@ -5422,7 +5453,10 @@ function DebtModal({
     <Modal title={debt ? "Editar dívida" : "Nova dívida"} onClose={onClose}>
       <div className="grid gap-4">
         <TextInput label="Nome da dívida" value={draft.name} onChange={(name) => update({ name })} />
-        <TextInput label="Origem da conta" value={draft.origin} onChange={(origin) => update({ origin })} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextInput label="Origem da conta" value={draft.origin} onChange={(origin) => update({ origin })} />
+          <TextInput label="Responsável pela dívida" value={draft.responsible ?? ""} onChange={(responsible) => update({ responsible })} />
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <MoneyInput label="Valor real" value={draft.originalAmount} onChange={(originalAmount) => update({ originalAmount })} />
           <MoneyInput label="Valor atualizado" value={draft.currentAmount} onChange={(currentAmount) => update({ currentAmount })} />
@@ -5455,6 +5489,7 @@ function DebtModal({
                 ...draft,
                 name: draft.name.trim() || "Dívida sem nome",
                 origin: draft.origin.trim() || "Origem não informada",
+                responsible: draft.responsible?.trim() || undefined,
                 currentAmount: draft.currentAmount || draft.originalAmount,
               });
               onClose();
