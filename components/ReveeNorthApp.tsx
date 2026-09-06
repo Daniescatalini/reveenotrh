@@ -34,6 +34,7 @@ import {
   Flag,
   Folder,
   Fuel,
+  Gamepad2,
   GraduationCap,
   Heart,
   HeartPulse,
@@ -63,6 +64,7 @@ import {
   Save,
   Settings,
   Shield,
+  Scissors,
   ShoppingCart,
   ShoppingBag,
   SlidersHorizontal,
@@ -178,6 +180,7 @@ const iconMap = {
   Dumbbell,
   Car,
   Fuel,
+  Gamepad2,
   Plane,
   Smartphone,
   GraduationCap,
@@ -187,6 +190,7 @@ const iconMap = {
   Coins,
   TvMinimal,
   CircleAlert,
+  Scissors,
 };
 
 const iconChoices = Object.keys(iconMap);
