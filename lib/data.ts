@@ -81,7 +81,7 @@ export const initialCategories: Category[] = [
   { id: 12, name: "Assinaturas", icon: "TvMinimal", color: "#db2777", type: "conta", active: true },
   { id: 13, name: "Compras", icon: "ShoppingBag", color: "#f59e0b", type: "conta", active: true },
   { id: 14, name: "Pet", icon: "Bone", color: "#a16207", type: "conta", active: true },
-  { id: 15, name: "Autocuidado", icon: "Heart", color: "#e11d48", type: "conta", active: true },
+  { id: 15, name: "Autocuidado", icon: "Brush", color: "#e11d48", type: "conta", active: true },
   { id: 16, name: "Fitness", icon: "Dumbbell", color: "#0891b2", type: "conta", active: true },
   { id: 17, name: "Combustível", icon: "Fuel", color: "#ea580c", type: "conta", active: true },
   { id: 18, name: "Viagem", icon: "Plane", color: "#0284c7", type: "conta", active: true },

@@ -571,6 +571,15 @@ function findCategory(categories: Category[], name: string, type?: Category["typ
   );
 }
 
+function displayIncomeCategory(income: Income) {
+  const text = normalizeCategoryName(`${income.name} ${income.source} ${income.category} ${income.note}`);
+  if (text.includes("flavia") || text.includes("ivone")) return "Bônus";
+  if (text.includes("uber") || text.includes("gustavo motta brandi")) return "Salário mensal";
+  if (normalizeCategoryName(income.category) === "trabalho gustavo") return "Renda extra";
+  if (normalizeCategoryName(income.category) === "uber") return "Salário mensal";
+  return income.category;
+}
+
 function sortedCategories(categories: Category[], type?: Category["type"], activeOnly = false) {
   return categories
     .filter((category) => (!type || category.type === type) && (!activeOnly || category.active))
@@ -1202,9 +1211,6 @@ function mergeDefaultCategories(current: Category[]) {
     const name = normalizeCategoryName(category.name);
     if (category.type === "conta" && name === "esporte" && category.icon === "Volleyball") {
       return { ...category, icon: "SoccerBall" };
-    }
-    if (category.type === "conta" && name === "autocuidado" && category.icon === "Brush") {
-      return { ...category, icon: "Heart" };
     }
     return category;
   });
@@ -2529,6 +2535,108 @@ function AchievementsCard({ achievements }: { achievements: Achievement[] }) {
   );
 }
 
+function TopVariableSpendingCard({
+  expenses,
+  categories,
+  onOpenFinanceDetail,
+}: {
+  expenses: VariableExpense[];
+  categories: Category[];
+  onOpenFinanceDetail: (detail: FinanceDetail) => void;
+}) {
+  const grouped = Object.values(expenses.reduce<Record<string, {
+    label: string;
+    total: number;
+    count: number;
+    color: string;
+    icon: React.ElementType;
+    items: FinanceDetail["sections"][number]["items"];
+  }>>((acc, expense) => {
+    const category = findCategory(categories, expense.category, "variavel");
+    const label = category?.name ?? expense.category;
+    const key = normalizeCategoryName(label);
+    acc[key] = acc[key] ?? {
+      label,
+      total: 0,
+      count: 0,
+      color: category?.color ?? "#d75c27",
+      icon: iconMap[(category?.icon ?? "ShoppingCart") as keyof typeof iconMap] ?? ShoppingCart,
+      items: [],
+    };
+    acc[key].total += expense.amount;
+    acc[key].count += 1;
+    acc[key].items.push({
+      date: expense.date,
+      label: expense.name,
+      helper: expense.imported ? "Importado do extrato" : "Lançado manualmente",
+      amount: expense.amount,
+      tone: "out",
+    });
+    return acc;
+  }, {})).sort((a, b) => b.total - a.total);
+  const visible = grouped.slice(0, 5);
+  const total = sum(grouped, (item) => item.total);
+  const maxTotal = Math.max(1, ...grouped.map((item) => item.total));
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#d75c27]/10 text-[#d75c27]">
+            <ShoppingCart className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d75c27]">Gastos variáveis</p>
+            <h3 className="mt-2 text-lg font-extrabold">Onde o dinheiro saiu solto</h3>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{formatCurrency(total)} no mês</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-5 space-y-2">
+        {visible.length ? visible.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              type="button"
+              key={item.label}
+              onClick={() => onOpenFinanceDetail({
+                title: `Gastos variáveis: ${item.label}`,
+                value: item.total,
+                description: "Todos os gastos dessa categoria no mês.",
+                sections: [{
+                  title: item.label,
+                  total: item.total,
+                  items: [...item.items].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")),
+                }],
+              })}
+              className="grid w-full grid-cols-[40px_1fr_auto] items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-[#211d19]/4 dark:hover:bg-white/7"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: `${item.color}18`, color: item.color }}>
+                <Icon className="h-4.5 w-4.5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-extrabold">{item.label}</span>
+                <span className="mt-1 block h-2 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
+                  <span className="block h-full rounded-full" style={{ width: `${Math.max(4, (item.total / maxTotal) * 100)}%`, background: item.color }} />
+                </span>
+              </span>
+              <span className="text-right">
+                <span className="block text-sm font-black text-[#d75c27]">{formatCurrency(item.total)}</span>
+                <span className="block text-[10px] font-bold text-[var(--muted)]">{item.count} gasto(s)</span>
+              </span>
+            </button>
+          );
+        }) : (
+          <div className="rounded-2xl border border-[var(--line)] bg-white/45 p-4 dark:bg-white/6">
+            <p className="text-sm font-extrabold">Nenhum gasto variável lançado.</p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-[var(--muted)]">Quando importar ou cadastrar mercado, iFood, combustível e compras, os maiores aparecem aqui.</p>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function MentalLoadCard({ mentalLoad }: { mentalLoad: MentalLoad }) {
   const tone = mentalLoad.level === "Alta" ? "text-red-600" : mentalLoad.level === "Controlada" ? "text-[#d75c27]" : "text-emerald-600";
 
@@ -2918,7 +3026,7 @@ function Dashboard({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-        <AchievementsCard achievements={achievements} />
+        <TopVariableSpendingCard expenses={metrics.variableExpenses} categories={categories} onOpenFinanceDetail={onOpenFinanceDetail} />
         <FinancialHealthCard metrics={metrics} goals={data.goals} onOpenRecommendation={onOpenRecommendation} />
       </div>
     </div>
@@ -3166,12 +3274,10 @@ function IncomesView({
   onOpenIncome: (income: Income) => void;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const incomeGroups = Array.from(
-    new Set(["Salário mensal", "Renda extra", "Bônus", ...incomes.map((income) => income.category)]),
-  );
+  const incomeGroups = ["Salário mensal", "Renda extra", "Bônus"];
   const totalIncome = sum(incomes, (income) => income.amount);
   const categoryTotals = incomeGroups.map((label) => {
-    const items = incomes.filter((income) => income.category === label);
+    const items = incomes.filter((income) => displayIncomeCategory(income) === label);
     return {
       label,
       total: sum(items, (income) => income.amount),
@@ -3242,7 +3348,7 @@ function IncomesView({
               </span>
               <span>
                 <span className="block text-sm font-extrabold">{income.name}</span>
-                <span className="block text-xs font-semibold text-[var(--muted)]">{income.category}</span>
+                <span className="block text-xs font-semibold text-[var(--muted)]">{displayIncomeCategory(income)}</span>
               </span>
               <span className="text-sm font-black text-[#d75c27]">{formatCurrency(income.amount)}</span>
             </button>
@@ -3291,11 +3397,25 @@ function VariableExpensesView({
   onDeleteExpenses: (ids: number[]) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const activeExpenses = expenses.filter((expense) => !expense.ignored);
-  const ignoredExpenses = expenses.filter((expense) => expense.ignored);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("todas");
+  const variableCategoryOptions = [
+    "todas",
+    ...Array.from(
+      new Set([
+        ...sortedCategories(categories, "variavel", true).map((item) => item.name),
+        ...expenses.map((expense) => expense.category).filter(Boolean),
+      ]),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })),
+  ];
+  const visibleExpenses = expenses.filter(
+    (expense) => categoryFilter === "todas" || normalizeCategoryName(expense.category) === normalizeCategoryName(categoryFilter),
+  );
+  const activeExpenses = visibleExpenses.filter((expense) => !expense.ignored);
+  const ignoredExpenses = visibleExpenses.filter((expense) => expense.ignored);
   const total = sum(activeExpenses, (expense) => expense.amount);
   const selectedTotal = sum(
-    expenses.filter((expense) => selectedIds.includes(expense.id)),
+    visibleExpenses.filter((expense) => selectedIds.includes(expense.id)),
     (expense) => expense.amount,
   );
   const categoryTotals = Array.from(
@@ -3306,7 +3426,7 @@ function VariableExpensesView({
   ).sort((a, b) => b[1] - a[1]);
   const exportRows = [
     ["Identificação", "Categoria", "Valor", "Data paga", "Observações", "Ignorado dos totais"],
-    ...[...expenses]
+    ...[...visibleExpenses]
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((expense) => [
         expense.name,
@@ -3324,7 +3444,7 @@ function VariableExpensesView({
         <Card className="p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Gastos variáveis</p>
           <p className="mt-2 text-2xl font-black">{formatCurrency(total)}</p>
-          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{activeExpenses.length} lançamento(s) no mês</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{activeExpenses.length} lançamento(s) no filtro</p>
         </Card>
         <Card className="p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Maior categoria</p>
@@ -3351,21 +3471,51 @@ function VariableExpensesView({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
             <p className="text-sm font-black text-[#d75c27]">{formatCurrency(total)}</p>
-            {expenses.length ? (
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value);
+                setSelectedIds([]);
+                setSelectionMode(false);
+              }}
+              className="rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-2 text-xs font-extrabold text-[var(--foreground)] outline-none transition hover:border-[#d75c27]/40 dark:bg-white/8"
+            >
+              {variableCategoryOptions.map((item) => (
+                <option key={item} value={item}>{item === "todas" ? "Todas categorias" : item}</option>
+              ))}
+            </select>
+            {visibleExpenses.length ? (
               <button
                 type="button"
-                onClick={() => setSelectedIds(selectedIds.length === expenses.length ? [] : expenses.map((expense) => expense.id))}
+                onClick={() => {
+                  if (selectionMode) {
+                    setSelectionMode(false);
+                    setSelectedIds([]);
+                  } else {
+                    setSelectionMode(true);
+                  }
+                }}
                 className="rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-2 text-xs font-extrabold text-[var(--foreground)] transition hover:border-[#d75c27]/40 dark:bg-white/8"
               >
-                {selectedIds.length === expenses.length ? "Limpar seleção" : "Selecionar tudo"}
+                {selectionMode ? "Concluir" : "Selecionar"}
               </button>
             ) : null}
-            {selectedIds.length ? (
+            {selectionMode && visibleExpenses.length ? (
+              <button
+                type="button"
+                onClick={() => setSelectedIds(selectedIds.length === visibleExpenses.length ? [] : visibleExpenses.map((expense) => expense.id))}
+                className="rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-2 text-xs font-extrabold text-[var(--foreground)] transition hover:border-[#d75c27]/40 dark:bg-white/8"
+              >
+                {selectedIds.length === visibleExpenses.length ? "Limpar seleção" : "Selecionar tudo"}
+              </button>
+            ) : null}
+            {selectionMode && selectedIds.length ? (
               <button
                 type="button"
                 onClick={() => {
                   onDeleteExpenses(selectedIds);
                   setSelectedIds([]);
+                  setSelectionMode(false);
                 }}
                 className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-extrabold text-red-600 transition hover:border-red-300"
               >
@@ -3375,7 +3525,7 @@ function VariableExpensesView({
             <button
               type="button"
               onClick={() => downloadCsv(`gastos-variaveis-${selectedMonth}.csv`, exportRows)}
-              disabled={!expenses.length}
+              disabled={!visibleExpenses.length}
               className="inline-flex items-center gap-2 rounded-2xl border border-[#d75c27]/20 bg-white/60 px-4 py-2 text-xs font-extrabold text-[#d75c27] transition hover:border-[#d75c27]/40 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white/8"
             >
               <Download className="h-4 w-4" />
@@ -3384,7 +3534,7 @@ function VariableExpensesView({
           </div>
         </div>
         <div className="divide-y divide-[#211d19]/8 dark:divide-white/10">
-          {[...expenses]
+          {[...visibleExpenses]
             .sort((a, b) => b.date.localeCompare(a.date))
             .map((expense) => {
               const category = findCategory(categories, expense.category, "variavel");
@@ -3393,23 +3543,25 @@ function VariableExpensesView({
               return (
                 <div
                   key={expense.id}
-                  className={`grid w-full gap-3 py-3 text-left md:grid-cols-[42px_1fr_120px_140px] md:items-center ${expense.ignored ? "opacity-50" : ""}`}
+                  className={`grid w-full gap-3 py-3 text-left md:items-center ${selectionMode ? "md:grid-cols-[42px_1fr_120px_140px]" : "md:grid-cols-[1fr_120px_140px]"} ${expense.ignored ? "opacity-50" : ""}`}
                 >
-                  <label className="flex h-10 w-10 cursor-pointer items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={(event) =>
-                        setSelectedIds((current) =>
-                          event.target.checked
-                            ? [...current, expense.id]
-                            : current.filter((id) => id !== expense.id),
-                        )
-                      }
-                      className="h-5 w-5 rounded border-[var(--line)] accent-[#d75c27]"
-                      aria-label={`Selecionar ${expense.name}`}
-                    />
-                  </label>
+                  {selectionMode ? (
+                    <label className="flex h-10 w-10 cursor-pointer items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(event) =>
+                          setSelectedIds((current) =>
+                            event.target.checked
+                              ? [...current, expense.id]
+                              : current.filter((id) => id !== expense.id),
+                          )
+                        }
+                        className="h-5 w-5 rounded border-[var(--line)] accent-[#d75c27]"
+                        aria-label={`Selecionar ${expense.name}`}
+                      />
+                    </label>
+                  ) : null}
                   <button type="button" onClick={() => onOpenExpense(expense)} className="min-w-0 text-left">
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={{ background: `${category?.color ?? "#d75c27"}18`, color: category?.color ?? "#d75c27" }}>
@@ -3428,9 +3580,9 @@ function VariableExpensesView({
                 </div>
               );
             })}
-          {!expenses.length ? (
+          {!visibleExpenses.length ? (
             <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-5 text-sm font-semibold text-[var(--muted)] dark:bg-white/6">
-              Nenhum gasto variável lançado neste mês ainda.
+              Nenhum gasto variável encontrado neste filtro.
             </p>
           ) : null}
         </div>
@@ -3474,6 +3626,7 @@ function BillsView({
   const [category, setCategory] = useState("todas");
   const [search, setSearch] = useState("");
   const [selectedBillIds, setSelectedBillIds] = useState<number[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
   const billCategories = [
     "todas",
     ...Array.from(
@@ -3594,47 +3747,67 @@ function BillsView({
           <div className="flex flex-wrap gap-2 xl:col-span-2 xl:justify-end">
             <button
               type="button"
-              onClick={() =>
-                setSelectedBillIds((current) =>
-                  allFilteredSelected
-                    ? current.filter((id) => !filteredBills.some((bill) => bill.id === id))
-                    : Array.from(new Set([...current, ...filteredBills.map((bill) => bill.id)])),
-                )
-              }
+              onClick={() => {
+                if (selectionMode) {
+                  setSelectionMode(false);
+                  setSelectedBillIds([]);
+                } else {
+                  setSelectionMode(true);
+                }
+              }}
               className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold"
             >
-              {allFilteredSelected ? "Desmarcar tudo" : "Selecionar tudo"}
+              {selectionMode ? "Concluir" : "Selecionar"}
             </button>
-            <button
-              type="button"
-              onClick={() => setSelectedBillIds([])}
-              disabled={!selectedBills.length}
-              className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Limpar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onDuplicateBills(selectedBillIds);
-                setSelectedBillIds([]);
-              }}
-              disabled={!selectedBills.length}
-              className="rounded-2xl border border-[#d75c27]/25 px-4 py-2.5 text-xs font-extrabold text-[#d75c27] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Duplicar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onDeleteBills(selectedBillIds);
-                setSelectedBillIds([]);
-              }}
-              disabled={!selectedBills.length}
-              className="rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Excluir
-            </button>
+            {selectionMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedBillIds((current) =>
+                      allFilteredSelected
+                        ? current.filter((id) => !filteredBills.some((bill) => bill.id === id))
+                        : Array.from(new Set([...current, ...filteredBills.map((bill) => bill.id)])),
+                    )
+                  }
+                  className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold"
+                >
+                  {allFilteredSelected ? "Desmarcar tudo" : "Selecionar tudo"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBillIds([])}
+                  disabled={!selectedBills.length}
+                  className="rounded-2xl border border-[var(--line)] px-4 py-2.5 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Limpar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDuplicateBills(selectedBillIds);
+                    setSelectedBillIds([]);
+                    setSelectionMode(false);
+                  }}
+                  disabled={!selectedBills.length}
+                  className="rounded-2xl border border-[#d75c27]/25 px-4 py-2.5 text-xs font-extrabold text-[#d75c27] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Duplicar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteBills(selectedBillIds);
+                    setSelectedBillIds([]);
+                    setSelectionMode(false);
+                  }}
+                  disabled={!selectedBills.length}
+                  className="rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Excluir
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </Card>
@@ -3661,21 +3834,23 @@ function BillsView({
                 className="grid w-full cursor-pointer gap-5 rounded-[1.6rem] border border-red-500/14 bg-white/86 p-5 text-left shadow-[0_10px_26px_rgba(120,62,35,.045)] transition hover:border-red-500/24 hover:bg-white dark:bg-white/8 xl:grid-cols-[minmax(350px,1.35fr)_0.55fr_0.6fr_0.7fr_auto] xl:items-center"
               >
                 <div className="flex min-w-0 items-start gap-4">
-                  <button
-                    type="button"
-                    aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleBillSelection(bill.id);
-                    }}
-                    className={`mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition ${
-                      selectedBillIds.includes(bill.id)
-                        ? "border-[#d75c27] bg-[#d75c27] text-white"
-                        : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
-                    }`}
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
+                  {selectionMode ? (
+                    <button
+                      type="button"
+                      aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleBillSelection(bill.id);
+                      }}
+                      className={`mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition ${
+                        selectedBillIds.includes(bill.id)
+                          ? "border-[#d75c27] bg-[#d75c27] text-white"
+                          : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
+                      }`}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                   <span className="relative shrink-0">
                     <CategoryBadgeIcon
                       categoryName={bill.category}
@@ -3732,21 +3907,23 @@ function BillsView({
             className="grid w-full cursor-pointer gap-4 text-left xl:grid-cols-[1.1fr_0.65fr_0.7fr_0.8fr_auto] xl:items-center"
           >
             <div className="flex items-start gap-3">
-              <button
-                type="button"
-                aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  toggleBillSelection(bill.id);
-                }}
-                className={`mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition ${
-                  selectedBillIds.includes(bill.id)
-                    ? "border-[#d75c27] bg-[#d75c27] text-white"
-                    : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
-                }`}
-              >
-                <Check className="h-3.5 w-3.5" />
-              </button>
+              {selectionMode ? (
+                <button
+                  type="button"
+                  aria-label={selectedBillIds.includes(bill.id) ? "Desmarcar conta" : "Selecionar conta"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleBillSelection(bill.id);
+                  }}
+                  className={`mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition ${
+                    selectedBillIds.includes(bill.id)
+                      ? "border-[#d75c27] bg-[#d75c27] text-white"
+                      : "border-[#211d19]/12 bg-white/70 text-transparent dark:border-white/18 dark:bg-white/8"
+                  }`}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
               <CategoryBadgeIcon
                 categoryName={bill.category}
                 categories={categories}
@@ -3843,6 +4020,195 @@ function Field({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-1.5 text-xs font-bold text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function PersonalBalanceView({
+  selectedMonth,
+  setSelectedMonth,
+  allIncomes,
+  allBills,
+  allVariableExpenses,
+  allGoals,
+  categories,
+  onOpenFinanceDetail,
+}: {
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+  allIncomes: Income[];
+  allBills: Bill[];
+  allVariableExpenses: VariableExpense[];
+  allGoals: Goal[];
+  categories: Category[];
+  onOpenFinanceDetail: (detail: FinanceDetail) => void;
+}) {
+  const availableYears = Array.from(new Set([
+    selectedMonth.slice(0, 4),
+    ...allIncomes.map((income) => income.receivedDate.slice(0, 4)),
+    ...allBills.flatMap((bill) => [bill.dueDate.slice(0, 4), bill.paidDate?.slice(0, 4)]),
+    ...allVariableExpenses.map((expense) => expense.date.slice(0, 4)),
+    ...allGoals.map((goal) => goal.deadline.slice(0, 4)),
+  ].filter((year): year is string => Boolean(year)))).sort((a, b) => b.localeCompare(a));
+  const [selectedYear, setSelectedYear] = useState(selectedMonth.slice(0, 4));
+  const balanceYear = availableYears.includes(selectedYear) ? selectedYear : availableYears[0] ?? selectedMonth.slice(0, 4);
+  const months = buildMonthRange(`${balanceYear}-01`, `${balanceYear}-12`);
+  const rows = months.map((month) => {
+    const monthData = buildMonthDataFromLists(month, allIncomes, allBills, allGoals, [], allVariableExpenses);
+    const monthMetrics = buildMetrics(monthData);
+    return { month, data: monthData, metrics: monthMetrics };
+  });
+  const totalIncome = sum(rows, (row) => row.metrics.totalIncome);
+  const totalPaidBills = sum(rows, (row) => sum(row.metrics.paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount));
+  const totalVariable = sum(rows, (row) => row.metrics.totalVariableExpenses);
+  const totalOut = totalPaidBills + totalVariable;
+  const pendingTotal = sum(
+    allBills.filter((bill) => bill.status !== "paga" && bill.dueDate.slice(0, 4) === balanceYear),
+    (bill) => bill.expectedAmount,
+  );
+  const goalTotal = sum(allGoals, (goal) => goal.deadline.slice(0, 4) === balanceYear ? goal.current : 0);
+  const maxMonthly = Math.max(1, ...rows.map((row) => Math.max(row.metrics.totalIncome, row.metrics.totalOut)));
+  const groupBills = Object.values(allBills
+    .filter((bill) => bill.status === "paga" && (bill.paidDate ?? bill.dueDate).slice(0, 4) === balanceYear)
+    .reduce<Record<string, { label: string; total: number; items: FinanceDetail["sections"][number]["items"] }>>((acc, bill) => {
+      const category = findCategory(categories, bill.category, "conta");
+      const label = category?.name ?? bill.category;
+      const key = normalizeCategoryName(label);
+      acc[key] = acc[key] ?? { label, total: 0, items: [] };
+      acc[key].total += bill.paidAmount ?? bill.expectedAmount;
+      acc[key].items.push({ date: bill.paidDate ?? bill.dueDate, label: bill.name, helper: "Conta paga", amount: bill.paidAmount ?? bill.expectedAmount, tone: "out" });
+      return acc;
+    }, {})).sort((a, b) => b.total - a.total);
+  const groupVariables = Object.values(allVariableExpenses
+    .filter((expense) => !expense.ignored && expense.date.slice(0, 4) === balanceYear)
+    .reduce<Record<string, { label: string; total: number; items: FinanceDetail["sections"][number]["items"] }>>((acc, expense) => {
+      const category = findCategory(categories, expense.category, "variavel");
+      const label = category?.name ?? expense.category;
+      const key = normalizeCategoryName(label);
+      acc[key] = acc[key] ?? { label, total: 0, items: [] };
+      acc[key].total += expense.amount;
+      acc[key].items.push({ date: expense.date, label: expense.name, helper: "Gasto variável", amount: expense.amount, tone: "out" });
+      return acc;
+    }, {})).sort((a, b) => b.total - a.total);
+  const groupIncomes = Object.values(allIncomes
+    .filter((income) => income.receivedDate.slice(0, 4) === balanceYear)
+    .reduce<Record<string, { label: string; total: number; items: FinanceDetail["sections"][number]["items"] }>>((acc, income) => {
+      const label = displayIncomeCategory(income);
+      const key = normalizeCategoryName(label);
+      acc[key] = acc[key] ?? { label, total: 0, items: [] };
+      acc[key].total += income.amount;
+      acc[key].items.push({ date: income.receivedDate, label: income.name, helper: income.note || income.source, amount: income.amount, tone: "in" });
+      return acc;
+    }, {})).sort((a, b) => b.total - a.total);
+  const sections = [
+    { title: "Entradas por categoria", total: totalIncome, items: groupIncomes, empty: "Nenhuma entrada neste ano." },
+    { title: "Contas pagas por categoria", total: totalPaidBills, items: groupBills, empty: "Nenhuma conta paga neste ano." },
+    { title: "Gastos variáveis por categoria", total: totalVariable, items: groupVariables, empty: "Nenhum gasto variável neste ano." },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Filtro anual</p>
+          <h3 className="mt-1 text-lg font-extrabold">Balanço pessoal de {balanceYear}</h3>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Resumo do ano com contas e gastos variáveis separados.</p>
+        </div>
+        <label className="inline-flex w-fit items-center gap-2 rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-3 text-sm font-extrabold dark:bg-white/6">
+          <CalendarDays className="h-4 w-4 text-[#d75c27]" />
+          <select value={balanceYear} onChange={(event) => setSelectedYear(event.target.value)} className="bg-transparent outline-none">
+            {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <BusinessMetricCard label="Entrou no ano" value={formatCurrency(totalIncome)} helper="Salário, renda extra e bônus" icon={Wallet} />
+        <BusinessMetricCard label="Contas pagas" value={formatCurrency(totalPaidBills)} helper="Somente contas quitadas" icon={ReceiptText} tone="blue" />
+        <BusinessMetricCard label="Gastos variáveis" value={formatCurrency(totalVariable)} helper="Mercado, iFood, compras e afins" icon={ShoppingCart} tone="amber" />
+        <BusinessMetricCard label="Falta pagar" value={formatCurrency(pendingTotal)} helper="Contas abertas do ano" icon={CircleAlert} tone="dark" />
+        <BusinessMetricCard label="Metas guardadas" value={formatCurrency(goalTotal)} helper="Valor atual em metas do ano" icon={PiggyBank} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Mês a mês</p>
+          <h3 className="mt-2 text-lg font-extrabold">Entrou x saiu</h3>
+          <div className="mt-5 space-y-3">
+            {rows.map(({ month, metrics }) => (
+              <div key={month} className="grid gap-2 sm:grid-cols-[92px_1fr_180px] sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(month)}
+                  className="text-left text-xs font-black underline-offset-4 transition hover:text-[#d75c27] hover:underline"
+                >
+                  {monthLabel(month).replace(` de ${month.slice(0, 4)}`, "")}
+                </button>
+                <div className="space-y-1.5">
+                  <div className="h-2.5 overflow-hidden rounded-full bg-emerald-700/10">
+                    <div className="h-full rounded-full bg-emerald-600" style={{ width: `${metrics.totalIncome > 0 ? Math.max(2, (metrics.totalIncome / maxMonthly) * 100) : 0}%` }} />
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-[#d75c27]/10">
+                    <div className="h-full rounded-full bg-[#d75c27]" style={{ width: `${metrics.totalOut > 0 ? Math.max(2, (metrics.totalOut / maxMonthly) * 100) : 0}%` }} />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black text-emerald-700">Entrou {formatCurrency(metrics.totalIncome)}</p>
+                  <p className="text-[10px] font-bold text-[#d75c27]">Saiu {formatCurrency(metrics.totalOut)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Resumo do ano</p>
+          <h3 className="mt-2 text-lg font-extrabold">Resultado pessoal</h3>
+          <div className="mt-5 space-y-3 text-sm font-bold">
+            <div className="flex justify-between gap-3"><span>Entrou</span><span className="text-emerald-700">{formatCurrency(totalIncome)}</span></div>
+            <div className="flex justify-between gap-3"><span>Contas pagas</span><span className="text-[#d75c27]">{formatCurrency(totalPaidBills)}</span></div>
+            <div className="flex justify-between gap-3"><span>Gastos variáveis</span><span className="text-[#d75c27]">{formatCurrency(totalVariable)}</span></div>
+            <div className="h-px bg-[#211d19]/8 dark:bg-white/10" />
+            <div className="flex justify-between gap-3 text-base font-black"><span>Saldo do ano</span><span>{formatCurrency(totalIncome - totalOut)}</span></div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        {sections.map((section) => (
+          <Card key={section.title} className="p-5">
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">{section.title}</p>
+                <h3 className="mt-2 text-lg font-extrabold">{formatCurrency(section.total)}</h3>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {section.items.length ? section.items.slice(0, 8).map((item) => (
+                <button
+                  key={`${section.title}-${item.label}`}
+                  type="button"
+                  onClick={() => onOpenFinanceDetail({
+                    title: `${section.title}: ${item.label}`,
+                    value: item.total,
+                    description: "Detalhamento do ano selecionado.",
+                    sections: [{ title: item.label, total: item.total, items: [...item.items].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")) }],
+                  })}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-[#211d19]/4 dark:hover:bg-white/7"
+                >
+                  <span>
+                    <span className="block text-sm font-extrabold">{item.label}</span>
+                    <span className="block text-[10px] font-semibold text-[var(--muted)]">{item.items.length} lançamento(s)</span>
+                  </span>
+                  <span className="text-sm font-black text-[#d75c27]">{formatCurrency(item.total)}</span>
+                </button>
+              )) : (
+                <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-4 text-xs font-semibold text-[var(--muted)] dark:bg-white/6">{section.empty}</p>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
@@ -10324,6 +10690,20 @@ function ActiveView({
         onNewDebt={onNewDebt}
         onOpenDebt={onOpenDebt}
         onPayDebt={onPayDebt}
+      />
+    );
+  }
+  if (active === "Balanço") {
+    return (
+      <PersonalBalanceView
+        selectedMonth={selectedMonth}
+        setSelectedMonth={setSelectedMonth}
+        allIncomes={allIncomes}
+        allBills={allBills}
+        allVariableExpenses={allVariableExpenses}
+        allGoals={allGoals}
+        categories={categories}
+        onOpenFinanceDetail={onOpenFinanceDetail}
       />
     );
   }
