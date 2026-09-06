@@ -3280,15 +3280,22 @@ function VariableExpensesView({
   categories,
   selectedMonth,
   onOpenExpense,
+  onDeleteExpenses,
 }: {
   expenses: VariableExpense[];
   categories: Category[];
   selectedMonth: string;
   onOpenExpense: (expense: VariableExpense) => void;
+  onDeleteExpenses: (ids: number[]) => void;
 }) {
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const activeExpenses = expenses.filter((expense) => !expense.ignored);
   const ignoredExpenses = expenses.filter((expense) => expense.ignored);
   const total = sum(activeExpenses, (expense) => expense.amount);
+  const selectedTotal = sum(
+    expenses.filter((expense) => selectedIds.includes(expense.id)),
+    (expense) => expense.amount,
+  );
   const categoryTotals = Array.from(
     activeExpenses.reduce<Map<string, number>>((acc, expense) => {
       acc.set(expense.category, (acc.get(expense.category) ?? 0) + expense.amount);
@@ -3334,9 +3341,35 @@ function VariableExpensesView({
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Extrato variável</p>
             <h3 className="mt-2 text-lg font-extrabold">Mercado, combustível, padaria e compras soltas.</h3>
+            {selectedIds.length ? (
+              <p className="mt-1 text-xs font-bold text-[var(--muted)]">
+                {selectedIds.length} selecionado(s) • {formatCurrency(selectedTotal)}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
             <p className="text-sm font-black text-[#d75c27]">{formatCurrency(total)}</p>
+            {expenses.length ? (
+              <button
+                type="button"
+                onClick={() => setSelectedIds(selectedIds.length === expenses.length ? [] : expenses.map((expense) => expense.id))}
+                className="rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-2 text-xs font-extrabold text-[var(--foreground)] transition hover:border-[#d75c27]/40 dark:bg-white/8"
+              >
+                {selectedIds.length === expenses.length ? "Limpar seleção" : "Selecionar tudo"}
+              </button>
+            ) : null}
+            {selectedIds.length ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteExpenses(selectedIds);
+                  setSelectedIds([]);
+                }}
+                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-extrabold text-red-600 transition hover:border-red-300"
+              >
+                Excluir selecionados
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => downloadCsv(`gastos-variaveis-${selectedMonth}.csv`, exportRows)}
@@ -3352,15 +3385,30 @@ function VariableExpensesView({
           {[...expenses]
             .sort((a, b) => b.date.localeCompare(a.date))
             .map((expense) => {
-              const category = findCategory(categories, expense.category, "conta");
+              const category = findCategory(categories, expense.category, "variavel");
               const Icon = iconMap[(category?.icon ?? "ShoppingCart") as keyof typeof iconMap] ?? ShoppingCart;
+              const selected = selectedIds.includes(expense.id);
               return (
-                <button
-                  type="button"
+                <div
                   key={expense.id}
-                  onClick={() => onOpenExpense(expense)}
-                  className={`grid w-full gap-3 py-3 text-left md:grid-cols-[1fr_120px_140px] md:items-center ${expense.ignored ? "opacity-50" : ""}`}
+                  className={`grid w-full gap-3 py-3 text-left md:grid-cols-[42px_1fr_120px_140px] md:items-center ${expense.ignored ? "opacity-50" : ""}`}
                 >
+                  <label className="flex h-10 w-10 cursor-pointer items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) =>
+                        setSelectedIds((current) =>
+                          event.target.checked
+                            ? [...current, expense.id]
+                            : current.filter((id) => id !== expense.id),
+                        )
+                      }
+                      className="h-5 w-5 rounded border-[var(--line)] accent-[#d75c27]"
+                      aria-label={`Selecionar ${expense.name}`}
+                    />
+                  </label>
+                  <button type="button" onClick={() => onOpenExpense(expense)} className="min-w-0 text-left">
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={{ background: `${category?.color ?? "#d75c27"}18`, color: category?.color ?? "#d75c27" }}>
                       <Icon className="h-4.5 w-4.5" />
@@ -3372,9 +3420,10 @@ function VariableExpensesView({
                       </span>
                     </span>
                   </span>
+                  </button>
                   <Field label="Data" value={formatDate(expense.date)} />
                   <span className="text-sm font-black text-red-600">-{formatCurrency(expense.amount)}</span>
-                </button>
+                </div>
               );
             })}
           {!expenses.length ? (
@@ -7008,7 +7057,7 @@ function VariableExpenseModal({
   const [draft, setDraft] = useState<VariableExpense>(expense ?? {
     id: Date.now(),
     name: "Gasto variável",
-    category: sortedCategories(categories, "conta", true)[0]?.name ?? "Compras",
+    category: sortedCategories(categories, "variavel", true)[0]?.name ?? "Compras",
     date: getReferenceDate(selectedMonth),
     amount: 0,
     notes: "",
@@ -7027,7 +7076,7 @@ function VariableExpenseModal({
             onChange={(event) => update({ category: event.target.value })}
             className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
           >
-            {sortedCategories(categories, "conta", true).map((category) => (
+            {sortedCategories(categories, "variavel", true).map((category) => (
               <option key={category.id} value={category.name}>{category.name}</option>
             ))}
           </select>
@@ -8066,6 +8115,7 @@ function CategoryModal({
           >
             <option value="conta">Conta</option>
             <option value="entrada">Entrada</option>
+            <option value="variavel">Gasto variável</option>
             <option value="meta">Meta</option>
           </select>
         </label>
@@ -8725,6 +8775,7 @@ function CategoriesSettings({
   const labels: Record<Category["type"], string> = {
     conta: "Categorias de contas",
     entrada: "Categorias de entradas",
+    variavel: "Categorias de gastos variáveis",
     meta: "Categorias de metas",
   };
 
@@ -8732,7 +8783,7 @@ function CategoriesSettings({
     <Card className="p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap gap-2">
-          {(["conta", "entrada", "meta"] as const).map((type) => (
+          {(["conta", "entrada", "variavel", "meta"] as const).map((type) => (
             <button
               type="button"
               key={type}
@@ -10055,6 +10106,7 @@ function ActiveView({
   onOpenDataSettings,
   onOpenIncome,
   onOpenVariableExpense,
+  onDeleteVariableExpenses,
   onOpenGoal,
   onNewGoal,
   debts,
@@ -10121,6 +10173,7 @@ function ActiveView({
   onOpenDataSettings: () => void;
   onOpenIncome: (income: Income) => void;
   onOpenVariableExpense: (expense: VariableExpense) => void;
+  onDeleteVariableExpenses: (ids: number[]) => void;
   onOpenGoal: (goal: Goal) => void;
   onNewGoal: () => void;
   debts: NameCleanupDebt[];
@@ -10228,6 +10281,7 @@ function ActiveView({
         categories={categories}
         selectedMonth={selectedMonth}
         onOpenExpense={onOpenVariableExpense}
+        onDeleteExpenses={onDeleteVariableExpenses}
       />
     );
   }
@@ -10385,7 +10439,7 @@ const viewCopy: Record<string, { eyebrow: string; title: string; description: st
   Configurações: {
     eyebrow: "Personalização",
     title: "Configurações",
-    description: "Crie categorias com ícone e cor para contas e entradas.",
+    description: "Crie categorias com ícone e cor para contas, entradas, gastos variáveis e metas.",
   },
 };
 
@@ -11287,6 +11341,16 @@ export default function ReveeNorthApp() {
     showFeedback("Gasto removido.", "Os totais foram atualizados.");
   };
 
+  const handleDeleteVariableExpenses = (ids: number[]) => {
+    setVariableExpenses((current) => {
+      const selected = new Set(ids);
+      const nextExpenses = current.filter((expense) => !selected.has(expense.id));
+      persistCloudPatchNow({ variableExpenses: nextExpenses });
+      return nextExpenses;
+    });
+    showFeedback("Gastos removidos.", `${ids.length} lançamento(s) saíram dos totais.`);
+  };
+
   const handleToggleObjective = (id: number) => {
     const objective = objectives.find((item) => item.id === id);
     setObjectives((current) => {
@@ -11762,6 +11826,7 @@ export default function ReveeNorthApp() {
             onOpenDataSettings={() => openSettings("dados")}
             onOpenIncome={setSelectedIncome}
             onOpenVariableExpense={setSelectedVariableExpense}
+            onDeleteVariableExpenses={handleDeleteVariableExpenses}
             onOpenGoal={setSelectedGoal}
             onNewGoal={() => setGoalCreateModalOpen(true)}
             debts={debts}

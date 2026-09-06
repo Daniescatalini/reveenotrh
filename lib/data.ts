@@ -61,7 +61,7 @@ export type Category = {
   name: string;
   icon: string;
   color: string;
-  type: "conta" | "entrada" | "meta";
+  type: "conta" | "entrada" | "meta" | "variavel";
   description?: string;
   active: boolean;
 };
@@ -93,6 +93,19 @@ export const initialCategories: Category[] = [
   { id: 24, name: "Bônus", icon: "Gift", color: "#4f8fd8", type: "entrada", active: true },
   { id: 25, name: "Reserva", icon: "PiggyBank", color: "#d75c27", type: "meta", active: true },
   { id: 26, name: "Viagem", icon: "Target", color: "#8a6dd8", type: "meta", active: true },
+  { id: 27, name: "iFood", icon: "Utensils", color: "#d75c27", type: "variavel", active: true },
+  { id: 28, name: "Mercado", icon: "ShoppingCart", color: "#2f9f73", type: "variavel", active: true },
+  { id: 29, name: "Restaurantes e padaria", icon: "Utensils", color: "#f59e0b", type: "variavel", active: true },
+  { id: 30, name: "Compras", icon: "ShoppingBag", color: "#f59e0b", type: "variavel", active: true },
+  { id: 31, name: "Assinaturas", icon: "TvMinimal", color: "#db2777", type: "variavel", active: true },
+  { id: 32, name: "Pet", icon: "Bone", color: "#a16207", type: "variavel", active: true },
+  { id: 33, name: "Saúde", icon: "Cross", color: "#16a34a", type: "variavel", active: true },
+  { id: 34, name: "Combustível", icon: "Fuel", color: "#ea580c", type: "variavel", active: true },
+  { id: 35, name: "Jogos", icon: "Gamepad2", color: "#7c3aed", type: "variavel", active: true },
+  { id: 36, name: "Barbearia e beleza", icon: "Scissors", color: "#be185d", type: "variavel", active: true },
+  { id: 37, name: "Pedágio e estacionamento", icon: "Landmark", color: "#475569", type: "variavel", active: true },
+  { id: 38, name: "Transferências internas", icon: "RefreshCw", color: "#94a3b8", type: "variavel", active: true },
+  { id: 39, name: "Outros", icon: "MoreVertical", color: "#64748b", type: "variavel", active: true },
 ];
 
 export const initialIncomes: Income[] = [
