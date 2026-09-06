@@ -1120,6 +1120,19 @@ function shouldApplyIncomingCloudState(incoming: Partial<ReveeNorthCloudState>) 
   if (!savedState) return true;
   try {
     const localState = JSON.parse(savedState) as Partial<ReveeNorthCloudState>;
+    const incomingHasImportedData =
+      Boolean(incoming.onboardingComplete) &&
+      ((incoming.variableExpenses?.length ?? 0) > 0 ||
+        (incoming.incomes?.length ?? 0) > 0 ||
+        (incoming.bills?.length ?? 0) > 0 ||
+        (incoming.business?.sales.length ?? 0) > 0);
+    const localLooksEmpty =
+      !localState.onboardingComplete &&
+      (localState.variableExpenses?.length ?? 0) === 0 &&
+      (localState.incomes?.length ?? 0) === 0 &&
+      (localState.bills?.length ?? 0) === 0 &&
+      (localState.business?.sales.length ?? 0) === 0;
+    if (incomingHasImportedData && localLooksEmpty) return true;
     if (localState.updatedAt && incoming.updatedAt) {
       return incoming.updatedAt >= localState.updatedAt;
     }
@@ -10573,7 +10586,6 @@ export default function ReveeNorthApp() {
         setAuthSession(session);
         setLoggedIn(true);
         setAuthReady(true);
-        setCloudReady(true);
 
         try {
           const cloudState = await loadCloudState<ReveeNorthCloudState>(session);
