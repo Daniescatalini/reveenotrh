@@ -124,6 +124,8 @@ const navItems = [
   { label: "Relatórios", icon: FileText },
 ];
 
+const PAYROLL_PERSONAL_SYNC_START_MONTH = "2026-04";
+
 const businessNavItems = [
   { label: "Dashboard", icon: LayoutDashboard },
   { label: "Vendas", icon: ArrowDownLeft },
@@ -763,6 +765,47 @@ function sanitizeBusinessState(state?: Partial<BusinessState>): BusinessState {
       ...(state?.settings ?? {}),
     },
   };
+}
+
+function businessPayrollIncomeId(payrollId: number) {
+  return -Math.abs(900000000000 + payrollId);
+}
+
+function buildPayrollPersonalIncomes(payroll: BusinessPayroll[]): Income[] {
+  return payroll
+    .filter((item) => monthKey(item.paidDate) >= PAYROLL_PERSONAL_SYNC_START_MONTH)
+    .map((item) => {
+      const person = item.personName.trim() || "Pessoa";
+      return {
+        id: businessPayrollIncomeId(item.id),
+        name: `${item.type} - ${person}`,
+        receivedDate: item.paidDate,
+        amount: item.amount,
+        source: `${item.type} ${person}`,
+        category: item.type === "Bônus" ? "Bônus" : "Salário mensal",
+        note: `Entrada automática puxada da empresa: ${item.type.toLowerCase()} pago para ${person}.`,
+        linkedBusinessPayrollId: item.id,
+      };
+    });
+}
+
+function csvValue(value: string | number | boolean | undefined) {
+  const text = String(value ?? "");
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename: string, rows: (string | number | boolean | undefined)[][]) {
+  if (typeof window === "undefined") return;
+  const csv = rows.map((row) => row.map(csvValue).join(";")).join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function saleReceivedTotal(sale: BusinessSale) {
@@ -3217,10 +3260,12 @@ function IncomesView({
 function VariableExpensesView({
   expenses,
   categories,
+  selectedMonth,
   onOpenExpense,
 }: {
   expenses: VariableExpense[];
   categories: Category[];
+  selectedMonth: string;
   onOpenExpense: (expense: VariableExpense) => void;
 }) {
   const activeExpenses = expenses.filter((expense) => !expense.ignored);
@@ -3232,6 +3277,19 @@ function VariableExpensesView({
       return acc;
     }, new Map()),
   ).sort((a, b) => b[1] - a[1]);
+  const exportRows = [
+    ["Identificação", "Categoria", "Valor", "Data paga", "Observações", "Ignorado dos totais"],
+    ...[...expenses]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((expense) => [
+        expense.name,
+        expense.category,
+        expense.amount.toFixed(2).replace(".", ","),
+        formatDate(expense.date),
+        expense.notes ?? "",
+        expense.ignored ? "Sim" : "Não",
+      ]),
+  ];
 
   return (
     <div className="space-y-4">
@@ -3259,10 +3317,21 @@ function VariableExpensesView({
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Extrato variável</p>
             <h3 className="mt-2 text-lg font-extrabold">Mercado, combustível, padaria e compras soltas.</h3>
           </div>
-          <p className="text-sm font-black text-[#d75c27]">{formatCurrency(total)}</p>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <p className="text-sm font-black text-[#d75c27]">{formatCurrency(total)}</p>
+            <button
+              type="button"
+              onClick={() => downloadCsv(`gastos-variaveis-${selectedMonth}.csv`, exportRows)}
+              disabled={!expenses.length}
+              className="inline-flex items-center gap-2 rounded-2xl border border-[#d75c27]/20 bg-white/60 px-4 py-2 text-xs font-extrabold text-[#d75c27] transition hover:border-[#d75c27]/40 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white/8"
+            >
+              <Download className="h-4 w-4" />
+              Exportar
+            </button>
+          </div>
         </div>
         <div className="divide-y divide-[#211d19]/8 dark:divide-white/10">
-          {expenses
+          {[...expenses]
             .sort((a, b) => b.date.localeCompare(a.date))
             .map((expense) => {
               const category = findCategory(categories, expense.category, "conta");
@@ -7409,21 +7478,32 @@ function IncomeDetailModal({
   onDelete: (id: number) => void;
 }) {
   const [draft, setDraft] = useState(income);
+  const isAutomaticPayrollIncome = typeof income.linkedBusinessPayrollId === "number";
 
   return (
     <Modal title="Editar entrada" onClose={onClose}>
+      {isAutomaticPayrollIncome ? (
+        <div className="mb-4 rounded-2xl border border-[#d75c27]/20 bg-[#d75c27]/10 p-4 text-sm font-semibold text-[var(--muted)]">
+          Esta entrada veio automaticamente do pró-labore ou bônus lançado na empresa. Para alterar, edite o pagamento na área Empresa.
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         <TextInput
           label="Origem"
           value={draft.source}
-          onChange={(source) => setDraft((current) => ({ ...current, source, name: source || current.name }))}
+          onChange={(source) => {
+            if (!isAutomaticPayrollIncome) setDraft((current) => ({ ...current, source, name: source || current.name }));
+          }}
         />
         <label className="block">
           <span className="text-xs font-bold text-[var(--muted)]">Categoria</span>
           <select
             value={draft.category}
-            onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}
-            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
+            onChange={(event) => {
+              if (!isAutomaticPayrollIncome) setDraft((current) => ({ ...current, category: event.target.value }));
+            }}
+            disabled={isAutomaticPayrollIncome}
+            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] disabled:opacity-60 dark:bg-white/8"
           >
             {sortedCategories(categories, "entrada", true).map((category) => (
               <option key={category.id} value={category.name}>{category.name}</option>
@@ -7433,46 +7513,57 @@ function IncomeDetailModal({
         <MoneyInput
           label="Valor"
           value={draft.amount}
-          onChange={(amount) => setDraft((current) => ({ ...current, amount }))}
+          onChange={(amount) => {
+            if (!isAutomaticPayrollIncome) setDraft((current) => ({ ...current, amount }));
+          }}
         />
         <TextInput
           label="Data que entrou"
           type="date"
           value={draft.receivedDate}
-          onChange={(receivedDate) => setDraft((current) => ({ ...current, receivedDate }))}
+          onChange={(receivedDate) => {
+            if (!isAutomaticPayrollIncome) setDraft((current) => ({ ...current, receivedDate }));
+          }}
         />
       </div>
       <label className="mt-4 block">
         <span className="text-xs font-bold text-[var(--muted)]">Observação</span>
         <textarea
           value={draft.note}
-          onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
+          onChange={(event) => {
+            if (!isAutomaticPayrollIncome) setDraft((current) => ({ ...current, note: event.target.value }));
+          }}
+          readOnly={isAutomaticPayrollIncome}
           className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
         />
       </label>
       <div className="mt-5 flex flex-wrap justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            onDelete(income.id);
-            onClose();
-          }}
-          className="rounded-2xl border border-red-500/20 px-5 py-2.5 text-xs font-extrabold text-red-600"
-        >
-          Excluir
-        </button>
-        <div className="flex gap-3">
+        {isAutomaticPayrollIncome ? <span /> : (
           <button
             type="button"
             onClick={() => {
-              const source = draft.source.trim() || "Entrada sem origem";
-              onSave({ ...draft, source, name: source });
+              onDelete(income.id);
               onClose();
             }}
-            className="rounded-2xl bg-[#d75c27] px-5 py-2.5 text-xs font-extrabold text-white"
+            className="rounded-2xl border border-red-500/20 px-5 py-2.5 text-xs font-extrabold text-red-600"
           >
-            Salvar alterações
+            Excluir
           </button>
+        )}
+        <div className="flex gap-3">
+          {isAutomaticPayrollIncome ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                const source = draft.source.trim() || "Entrada sem origem";
+                onSave({ ...draft, source, name: source });
+                onClose();
+              }}
+              className="rounded-2xl bg-[#d75c27] px-5 py-2.5 text-xs font-extrabold text-white"
+            >
+              Salvar alterações
+            </button>
+          )}
         </div>
       </div>
     </Modal>
@@ -10068,6 +10159,7 @@ function ActiveView({
       <VariableExpensesView
         expenses={data.variableExpenses}
         categories={categories}
+        selectedMonth={selectedMonth}
         onOpenExpense={onOpenVariableExpense}
       />
     );
@@ -10467,15 +10559,24 @@ export default function ReveeNorthApp() {
     localStorage.setItem("reveenorth:categories", JSON.stringify(categories));
   }, [categories]);
 
+  const payrollPersonalIncomes = useMemo(
+    () => buildPayrollPersonalIncomes(business.payroll),
+    [business.payroll],
+  );
+  const personalIncomes = useMemo(
+    () => [...incomes, ...payrollPersonalIncomes],
+    [incomes, payrollPersonalIncomes],
+  );
+
   const earliestPersonalMonth = useMemo(() => earliestMonthFromDates([
     accountCreatedAt,
-    ...incomes.map((income) => income.receivedDate),
+    ...personalIncomes.map((income) => income.receivedDate),
     ...bills.flatMap((bill) => [bill.dueDate, bill.paidDate]),
     ...variableExpenses.map((expense) => expense.date),
     ...goals.map((goal) => goal.deadline),
     ...objectives.map((objective) => `${objective.month}-01`),
     ...debts.flatMap((debt) => [debt.createdAt, debt.paidAt]),
-  ]), [accountCreatedAt, bills, debts, goals, incomes, objectives, variableExpenses]);
+  ]), [accountCreatedAt, bills, debts, goals, objectives, personalIncomes, variableExpenses]);
   const earliestBusinessMonth = useMemo(() => earliestMonthFromDates([
     accountCreatedAt,
     ...business.sales.flatMap((sale) => [
@@ -10575,13 +10676,13 @@ export default function ReveeNorthApp() {
   const data = useMemo<MonthData>(() => {
     return buildMonthDataFromLists(
       selectedMonth,
-      incomes,
+      personalIncomes,
       bills,
       goals,
       objectives.filter((objective) => objective.month === selectedMonth),
       variableExpenses,
     );
-  }, [bills, goals, incomes, objectives, selectedMonth, variableExpenses]);
+  }, [bills, goals, objectives, personalIncomes, selectedMonth, variableExpenses]);
 
   const metrics = useMemo(() => buildMetrics(data), [data]);
   const achievements = useMemo(() => buildAchievements(data, metrics), [data, metrics]);
@@ -11609,7 +11710,7 @@ export default function ReveeNorthApp() {
               setPlanning(nextPlanning);
               persistCloudPatchNow({ planning: nextPlanning });
             }}
-            allIncomes={incomes}
+            allIncomes={personalIncomes}
             allBills={bills}
             allVariableExpenses={variableExpenses}
             allGoals={goals}

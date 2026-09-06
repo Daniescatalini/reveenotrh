@@ -29,6 +29,7 @@ export type Income = {
   source: string;
   category: string;
   note: string;
+  linkedBusinessPayrollId?: number;
 };
 
 export type Goal = {
