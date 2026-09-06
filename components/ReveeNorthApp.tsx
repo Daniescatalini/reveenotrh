@@ -4259,11 +4259,24 @@ function BusinessSalesView({
 }) {
   const metrics = buildBusinessMetrics(business, selectedMonth);
   const saleRows = [
-    ...metrics.sales.map((sale) => ({ kind: "sale" as const, sale })),
+    ...metrics.sales.map((sale) => ({
+      kind: "sale" as const,
+      sale,
+      sortDate: sale.receivedDate ?? sale.closedDate,
+      dateLabel: sale.receivedAmount > 0 ? "Recebido em" : "Fechado em",
+      displayDate: sale.receivedDate ?? sale.closedDate,
+    })),
     ...metrics.installmentSales
       .filter(({ sale }) => monthKey(sale.closedDate) !== selectedMonth)
-      .map(({ sale, installment }) => ({ kind: "installment" as const, sale, installment })),
-  ];
+      .map(({ sale, installment }) => ({
+        kind: "installment" as const,
+        sale,
+        installment,
+        sortDate: installment.receivedDate ?? installment.dueDate,
+        dateLabel: installment.received ? "Recebido em" : "Previsto",
+        displayDate: installment.receivedDate ?? installment.dueDate,
+      })),
+  ].sort((a, b) => a.sortDate.localeCompare(b.sortDate) || a.sale.clientName.localeCompare(b.sale.clientName));
   const rows = [
     { label: "Faturamento bruto", value: metrics.closed, helper: "Vendas fechadas no mês" },
     { label: "Recebido", value: metrics.received, helper: "Entrou de fato na conta" },
@@ -4295,11 +4308,12 @@ function BusinessSalesView({
             if (row.kind === "installment") {
               const openAmount = Math.max(0, row.installment.amount - (row.installment.received ? row.installment.receivedAmount ?? row.installment.amount : 0));
               return (
-                <button type="button" key={`${row.sale.id}-${row.installment.id}`} onClick={() => onOpenSale(row.sale)} className="grid w-full gap-3 py-3 text-left lg:grid-cols-[1fr_1fr_130px_130px_120px] lg:items-center">
+                <button type="button" key={`${row.sale.id}-${row.installment.id}`} onClick={() => onOpenSale(row.sale)} className="grid w-full gap-3 py-3 text-left lg:grid-cols-[1fr_120px_1fr_130px_130px_120px] lg:items-center">
                   <div>
                     <p className="text-sm font-extrabold">{row.sale.clientName}</p>
                     <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{row.sale.service} • Parcela</p>
                   </div>
+                  <Field label={row.dateLabel} value={formatDate(row.displayDate)} />
                   <Field label="Pagamento" value="Boleto" />
                   <Field label="Parcela" value={formatCurrency(row.installment.amount)} />
                   <Field label="Recebido" value={formatCurrency(row.installment.received ? row.installment.receivedAmount ?? row.installment.amount : 0)} />
@@ -4309,11 +4323,12 @@ function BusinessSalesView({
             }
             const sale = row.sale;
             return (
-              <button type="button" key={sale.id} onClick={() => onOpenSale(sale)} className="grid w-full gap-3 py-3 text-left lg:grid-cols-[1fr_1fr_130px_130px_120px] lg:items-center">
+              <button type="button" key={sale.id} onClick={() => onOpenSale(sale)} className="grid w-full gap-3 py-3 text-left lg:grid-cols-[1fr_120px_1fr_130px_130px_120px] lg:items-center">
                 <div>
                   <p className="text-sm font-extrabold">{sale.clientName}</p>
                   <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{sale.service}</p>
                 </div>
+                <Field label={row.dateLabel} value={formatDate(row.displayDate)} />
                 <Field label="Pagamento" value={sale.paymentMethod} />
                 <Field label="Fechado" value={formatCurrency(sale.closedAmount)} />
                 <Field label="Recebido" value={formatCurrency(saleReceivedTotal(sale))} />
