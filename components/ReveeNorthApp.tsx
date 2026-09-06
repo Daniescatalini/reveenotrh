@@ -116,6 +116,7 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
   { label: "Entradas", icon: ArrowDownLeft },
   { label: "Contas", icon: ReceiptText },
+  { label: "Gastos variáveis", icon: ShoppingCart },
   { label: "Dívidas", icon: BadgeDollarSign },
   { label: "Metas", icon: Target },
   { label: "Objetivos do mês", icon: Flag },
@@ -258,10 +259,12 @@ type MonthData = {
   selectedMonth: string;
   incomes: Income[];
   bills: Bill[];
+  variableExpenses: VariableExpense[];
   goals: Goal[];
   objectives: MonthlyObjective[];
   previousBills: Bill[];
   previousIncomes: Income[];
+  previousVariableExpenses: VariableExpense[];
 };
 
 type UserProfile = {
@@ -338,6 +341,17 @@ type PlanningState = {
   expectedExpenses: PlanningExpectedExpense[];
 };
 
+type VariableExpense = {
+  id: number;
+  name: string;
+  category: string;
+  date: string;
+  amount: number;
+  notes?: string;
+  imported?: boolean;
+  ignored?: boolean;
+};
+
 type WorkspaceMode = "personal" | "business";
 
 type BusinessPaymentMethod = "Pix" | "Boleto" | "Cartão de crédito";
@@ -407,6 +421,7 @@ type ReveeNorthCloudState = {
   user: UserProfile;
   realBalance: RealBalance;
   bills: Bill[];
+  variableExpenses?: VariableExpense[];
   debts?: NameCleanupDebt[];
   incomes: Income[];
   goals: Goal[];
@@ -1135,6 +1150,7 @@ function mergeDefaultCategories(current: Category[]) {
 
 function buildMetrics(data: MonthData) {
   const paidBills = data.bills.filter((bill) => bill.status === "paga");
+  const activeVariableExpenses = data.variableExpenses.filter((expense) => !expense.ignored);
   const pendingBills = data.bills.filter((bill) => bill.status === "pendente").sort(sortByPaymentPriority);
   const overdueBills = data.bills.filter((bill) => bill.status === "atrasada").sort(sortByPaymentPriority);
   const paidOnTimeBills = paidBills.filter((bill) => !isPaidLate(bill));
@@ -1145,11 +1161,13 @@ function buildMetrics(data: MonthData) {
     paidBills,
     (bill) => bill.paidAmount ?? bill.expectedAmount,
   );
+  const totalVariableExpenses = sum(activeVariableExpenses, (expense) => expense.amount);
+  const totalOut = totalPaid + totalVariableExpenses;
   const totalPending = sum(pendingBills, (bill) => bill.expectedAmount);
   const totalOverdue = sum(overdueBills, (bill) => bill.expectedAmount);
   const totalMissing = totalPending + totalOverdue;
-  const totalExpected = totalPaid + totalMissing;
-  const projectedBalance = totalIncome - totalPaid - totalPending - totalOverdue;
+  const totalExpected = totalOut + totalMissing;
+  const projectedBalance = totalIncome - totalOut - totalPending - totalOverdue;
   const reserveGoal = data.goals.find((goal) => normalizeCategoryName(goal.name).includes("reserva"));
   const reserveDestination = reserveGoal?.current ?? 0;
   const goalsDestination = sum(
@@ -1159,16 +1177,21 @@ function buildMetrics(data: MonthData) {
   const freeDestination = 0;
   const totalDirected = Math.min(
     totalIncome,
-    totalPaid + totalPending + totalOverdue + reserveDestination + goalsDestination + freeDestination,
+    totalOut + totalPending + totalOverdue + reserveDestination + goalsDestination + freeDestination,
   );
   const unassignedValue = Math.max(0, totalIncome - totalDirected);
   const previousPaid = sum(
     data.previousBills.filter((bill) => bill.status === "paga"),
     (bill) => bill.paidAmount ?? bill.expectedAmount,
   );
+  const previousVariableExpenses = sum(
+    data.previousVariableExpenses.filter((expense) => !expense.ignored),
+    (expense) => expense.amount,
+  );
+  const previousOut = previousPaid + previousVariableExpenses;
   const previousIncome = sum(data.previousIncomes, (income) => income.amount);
-  const spendingDelta = previousPaid
-    ? Math.round(((totalPaid - previousPaid) / previousPaid) * 100)
+  const spendingDelta = previousOut
+    ? Math.round(((totalOut - previousOut) / previousOut) * 100)
     : 0;
   const incomeDelta = previousIncome
     ? Math.round(((totalIncome - previousIncome) / previousIncome) * 100)
@@ -1181,6 +1204,7 @@ function buildMetrics(data: MonthData) {
 
   return {
     paidBills,
+    variableExpenses: activeVariableExpenses,
     paidOnTimeBills,
     paidLateBills,
     pendingBills,
@@ -1189,6 +1213,8 @@ function buildMetrics(data: MonthData) {
     totalExpected,
     totalIncome,
     totalPaid,
+    totalVariableExpenses,
+    totalOut,
     totalPending,
     totalOverdue,
     totalMissing,
@@ -1245,16 +1271,19 @@ function buildMonthDataFromLists(
   bills: Bill[],
   goals: Goal[],
   objectives: MonthlyObjective[] = [],
+  variableExpenses: VariableExpense[] = [],
 ) {
   const previousMonth = addMonths(selectedMonth, -1);
   return {
     selectedMonth,
     incomes: incomes.filter((income) => monthKey(income.receivedDate) === selectedMonth),
     bills: buildVisibleBills(bills, selectedMonth),
+    variableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === selectedMonth),
     goals,
     objectives,
     previousBills: bills.filter((bill) => monthKey(bill.dueDate) === previousMonth).map((bill) => normalizeBillStatus(bill)),
     previousIncomes: incomes.filter((income) => monthKey(income.receivedDate) === previousMonth),
+    previousVariableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === previousMonth),
   };
 }
 
@@ -1264,6 +1293,7 @@ function buildPeriodMonthData(
   incomes: Income[],
   bills: Bill[],
   goals: Goal[],
+  variableExpenses: VariableExpense[] = [],
 ) {
   const months = buildMonthRange(fromMonth, toMonth);
   const periodIncomes = incomes.filter((income) => {
@@ -1276,6 +1306,10 @@ function buildPeriodMonthData(
       return month >= fromMonth && month <= toMonth;
     })
     .map((bill) => normalizeBillStatus(bill));
+  const periodVariableExpenses = variableExpenses.filter((expense) => {
+    const month = monthKey(expense.date);
+    return month >= fromMonth && month <= toMonth;
+  });
   const periodGoals = goals.filter((goal) => {
     const month = monthKey(goal.deadline);
     return month >= fromMonth && month <= toMonth;
@@ -1292,14 +1326,20 @@ function buildPeriodMonthData(
     const month = monthKey(income.receivedDate);
     return month >= previousStart && month <= previousEnd;
   });
+  const previousVariableExpenses = variableExpenses.filter((expense) => {
+    const month = monthKey(expense.date);
+    return month >= previousStart && month <= previousEnd;
+  });
   return {
     selectedMonth: toMonth,
     incomes: periodIncomes,
     bills: periodBills,
+    variableExpenses: periodVariableExpenses,
     goals: periodGoals.length ? periodGoals : goals,
     objectives: [],
     previousBills,
     previousIncomes,
+    previousVariableExpenses,
   };
 }
 
@@ -1498,10 +1538,10 @@ function FinanceBarComparison({
     },
     {
       label: "Contas pagas",
-      current: metrics.totalPaid,
-      previous: Math.max(1, metrics.totalPaid / 1.06),
+      current: metrics.totalOut,
+      previous: Math.max(1, metrics.totalOut / 1.06),
       delta: "+6%",
-      helper: `${metrics.paidBills.length} pagamento(s)`,
+      helper: "Contas + variáveis",
     },
     {
       label: "Contas em aberto",
@@ -2758,8 +2798,8 @@ function Dashboard({
         />
         <DashboardMetricCard
           label="Saídas do mês"
-          value={formatCurrency(metrics.totalPaid)}
-          helper="Pagamentos realizados"
+          value={formatCurrency(metrics.totalOut)}
+          helper="Contas pagas e gastos variáveis"
           detail={`${metrics.spendingDelta > 0 ? "↑" : "↓"} ${Math.abs(metrics.spendingDelta)}% vs mês anterior`}
           icon={ArrowUpRight}
           tone="orange"
@@ -2822,6 +2862,13 @@ function buildFinanceDetail(
     amount: bill.paidAmount ?? bill.expectedAmount,
     tone: "out" as const,
   }));
+  const variableExpenseItems = metrics.variableExpenses.map((expense) => ({
+    date: expense.date,
+    label: expense.name,
+    helper: `${expense.category}${expense.imported ? " • importado do extrato" : ""}`,
+    amount: expense.amount,
+    tone: "out" as const,
+  }));
   const pendingItems = [...metrics.pendingBills, ...metrics.overdueBills].map((bill) => ({
     date: bill.dueDate,
     label: bill.name,
@@ -2844,7 +2891,8 @@ function buildFinanceDetail(
       description: "Dinheiro disponível hoje, informado manualmente por você.",
       sections: [
         { title: "Entradas do mês", total: metrics.totalIncome, items: incomeItems },
-        { title: "Saídas pagas", total: metrics.totalPaid, items: paidItems },
+        { title: "Contas pagas", total: metrics.totalPaid, items: paidItems },
+        { title: "Gastos variáveis", total: metrics.totalVariableExpenses, items: variableExpenseItems },
         {
           title: "Ajustes manuais",
           total: realBalance.amount,
@@ -2874,9 +2922,12 @@ function buildFinanceDetail(
   if (label === "Saiu no mês" || label === "Pago") {
     return {
       title: "Saiu no mês",
-      value: metrics.totalPaid,
-      description: "Pagamentos realizados no período.",
-      sections: [{ title: "Pagamentos realizados", total: metrics.totalPaid, items: paidItems }],
+      value: metrics.totalOut,
+      description: "Tudo que saiu de fato da conta no período.",
+      sections: [
+        { title: "Contas pagas", total: metrics.totalPaid, items: paidItems },
+        { title: "Gastos variáveis", total: metrics.totalVariableExpenses, items: variableExpenseItems },
+      ],
     };
   }
 
@@ -2896,7 +2947,7 @@ function buildFinanceDetail(
       description: "Oportunidade do mês: valor que ainda pode receber uma decisão.",
       sections: [
         { title: "Entradas consideradas", total: metrics.totalIncome, items: incomeItems },
-        { title: "Compromissos já considerados", total: metrics.totalPaid + metrics.totalPending + metrics.totalOverdue, items: [...paidItems, ...pendingItems] },
+        { title: "Compromissos já considerados", total: metrics.totalOut + metrics.totalPending + metrics.totalOverdue, items: [...paidItems, ...variableExpenseItems, ...pendingItems] },
         {
           title: "Disponível para decidir",
           total: metrics.unassignedValue,
@@ -3137,6 +3188,93 @@ function IncomesView({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function VariableExpensesView({
+  expenses,
+  categories,
+  onOpenExpense,
+}: {
+  expenses: VariableExpense[];
+  categories: Category[];
+  onOpenExpense: (expense: VariableExpense) => void;
+}) {
+  const activeExpenses = expenses.filter((expense) => !expense.ignored);
+  const ignoredExpenses = expenses.filter((expense) => expense.ignored);
+  const total = sum(activeExpenses, (expense) => expense.amount);
+  const categoryTotals = Array.from(
+    activeExpenses.reduce<Map<string, number>>((acc, expense) => {
+      acc.set(expense.category, (acc.get(expense.category) ?? 0) + expense.amount);
+      return acc;
+    }, new Map()),
+  ).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card className="p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Gastos variáveis</p>
+          <p className="mt-2 text-2xl font-black">{formatCurrency(total)}</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{activeExpenses.length} lançamento(s) no mês</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Maior categoria</p>
+          <p className="mt-2 text-2xl font-black">{categoryTotals[0]?.[0] ?? "Sem gastos"}</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{formatCurrency(categoryTotals[0]?.[1] ?? 0)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Ignorados</p>
+          <p className="mt-2 text-2xl font-black">{ignoredExpenses.length}</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Ficam fora dos totais para evitar duplicar conta paga.</p>
+        </Card>
+      </div>
+
+      <Card className="p-5">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Extrato variável</p>
+            <h3 className="mt-2 text-lg font-extrabold">Mercado, combustível, padaria e compras soltas.</h3>
+          </div>
+          <p className="text-sm font-black text-[#d75c27]">{formatCurrency(total)}</p>
+        </div>
+        <div className="divide-y divide-[#211d19]/8 dark:divide-white/10">
+          {expenses
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .map((expense) => {
+              const category = findCategory(categories, expense.category, "conta");
+              const Icon = iconMap[(category?.icon ?? "ShoppingCart") as keyof typeof iconMap] ?? ShoppingCart;
+              return (
+                <button
+                  type="button"
+                  key={expense.id}
+                  onClick={() => onOpenExpense(expense)}
+                  className={`grid w-full gap-3 py-3 text-left md:grid-cols-[1fr_120px_140px] md:items-center ${expense.ignored ? "opacity-50" : ""}`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={{ background: `${category?.color ?? "#d75c27"}18`, color: category?.color ?? "#d75c27" }}>
+                      <Icon className="h-4.5 w-4.5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-extrabold">{expense.name}</span>
+                      <span className="block truncate text-xs font-semibold text-[var(--muted)]">
+                        {expense.category}{expense.ignored ? " • ignorado nos totais" : ""}
+                      </span>
+                    </span>
+                  </span>
+                  <Field label="Data" value={formatDate(expense.date)} />
+                  <span className="text-sm font-black text-red-600">-{formatCurrency(expense.amount)}</span>
+                </button>
+              );
+            })}
+          {!expenses.length ? (
+            <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-5 text-sm font-semibold text-[var(--muted)] dark:bg-white/6">
+              Nenhum gasto variável lançado neste mês ainda.
+            </p>
+          ) : null}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -3500,7 +3638,7 @@ function BillsView({
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#d75c27]">Histórico de pagamentos</p>
-            <h3 className="mt-1 text-lg font-extrabold">Tudo que saiu da conta neste mês.</h3>
+            <h3 className="mt-1 text-lg font-extrabold">Tudo que foi pago neste mês.</h3>
             <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
               Inclui contas atrasadas pagas agora, mesmo que o vencimento fosse de outro mês.
             </p>
@@ -4656,6 +4794,7 @@ function ReportsView({
   categories,
   allIncomes,
   allBills,
+  allVariableExpenses,
   allGoals,
   realBalance,
   onOpenFinanceDetail,
@@ -4666,6 +4805,7 @@ function ReportsView({
   categories: Category[];
   allIncomes: Income[];
   allBills: Bill[];
+  allVariableExpenses: VariableExpense[];
   allGoals: Goal[];
   realBalance: RealBalance;
   onOpenFinanceDetail: (detail: FinanceDetail) => void;
@@ -4673,7 +4813,7 @@ function ReportsView({
 }) {
   const [showAllDistribution, setShowAllDistribution] = useState(false);
   const score = calculateNorthScore(metrics, data.goals);
-  const previousMetrics = buildMetrics(buildMonthDataFromLists(addMonths(data.selectedMonth, -1), allIncomes, allBills, allGoals, []));
+  const previousMetrics = buildMetrics(buildMonthDataFromLists(addMonths(data.selectedMonth, -1), allIncomes, allBills, allGoals, [], allVariableExpenses));
   const previousScore = calculateNorthScore(previousMetrics, allGoals);
   const scoreDelta = score - previousScore;
   const monthDate = new Date(`${data.selectedMonth}-02T12:00:00`);
@@ -4721,12 +4861,12 @@ function ReportsView({
   }).join(", ") : "#eee7e1 0deg 360deg";
   const trendMonths = buildMonthRange(addMonths(data.selectedMonth, -5), data.selectedMonth);
   const trendRows = trendMonths.map((month) => {
-    const monthData = buildMonthDataFromLists(month, allIncomes, allBills, allGoals, []);
+    const monthData = buildMonthDataFromLists(month, allIncomes, allBills, allGoals, [], allVariableExpenses);
     const monthMetrics = buildMetrics(monthData);
     return {
       label: monthLabel(month).slice(0, 3),
       income: monthMetrics.totalIncome,
-      out: monthMetrics.totalPaid + monthMetrics.totalPending + monthMetrics.totalOverdue,
+      out: monthMetrics.totalOut + monthMetrics.totalPending + monthMetrics.totalOverdue,
     };
   });
   const maxTrend = Math.max(...trendRows.flatMap((item) => [item.income, item.out]), 1);
@@ -4839,7 +4979,7 @@ function ReportsView({
             <div>
               <h3 className="text-[1.35rem] font-extrabold leading-tight tracking-tight sm:text-2xl">Relatório real de {reportMonth}</h3>
               <p className="mt-2 max-w-2xl text-[0.82rem] font-medium leading-5 text-white/76 sm:mt-3 sm:text-sm sm:font-semibold sm:leading-6">
-                Você registrou {formatCurrency(metrics.totalIncome)} em entradas, pagou {paidCount} conta(s), guardou {formatCurrency(totalSaved)} em metas e terminou com {formatCurrency(metrics.projectedBalance)} de saldo previsto.
+                Você registrou {formatCurrency(metrics.totalIncome)} em entradas, pagou {paidCount} conta(s), teve {formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis, guardou {formatCurrency(totalSaved)} em metas e terminou com {formatCurrency(metrics.projectedBalance)} de saldo previsto.
               </p>
               <button
                 type="button"
@@ -6692,6 +6832,94 @@ function BillModalCreate({
   );
 }
 
+function VariableExpenseModal({
+  expense,
+  categories,
+  selectedMonth,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  expense?: VariableExpense;
+  categories: Category[];
+  selectedMonth: string;
+  onClose: () => void;
+  onSave: (expense: VariableExpense) => void;
+  onDelete?: (id: number) => void;
+}) {
+  const [draft, setDraft] = useState<VariableExpense>(expense ?? {
+    id: Date.now(),
+    name: "Gasto variável",
+    category: sortedCategories(categories, "conta", true)[0]?.name ?? "Compras",
+    date: getReferenceDate(selectedMonth),
+    amount: 0,
+    notes: "",
+    ignored: false,
+  });
+  const update = (patch: Partial<VariableExpense>) => setDraft((current) => ({ ...current, ...patch }));
+
+  return (
+    <Modal title={expense ? "Editar gasto variável" : "Novo gasto variável"} onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput label="Descrição" value={draft.name} onChange={(name) => update({ name })} />
+        <label className="block">
+          <span className="text-xs font-bold text-[var(--muted)]">Categoria</span>
+          <select
+            value={draft.category}
+            onChange={(event) => update({ category: event.target.value })}
+            className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
+          >
+            {sortedCategories(categories, "conta", true).map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+        <MoneyInput label="Valor" value={draft.amount} onChange={(amount) => update({ amount })} />
+        <TextInput label="Data que saiu" type="date" value={draft.date} onChange={(date) => update({ date })} />
+      </div>
+      <label className="mt-4 block">
+        <span className="text-xs font-bold text-[var(--muted)]">Observação</span>
+        <textarea
+          value={draft.notes ?? ""}
+          onChange={(event) => update({ notes: event.target.value })}
+          className="mt-2 min-h-20 w-full rounded-2xl border border-[var(--line)] bg-white/55 px-4 py-3 text-sm font-semibold outline-none focus:border-[#d75c27] dark:bg-white/8"
+        />
+      </label>
+      <div className="mt-4 flex items-center justify-between rounded-2xl border border-[var(--line)] bg-white/35 p-3 dark:bg-white/5">
+        <span>
+          <span className="block text-sm font-extrabold">Ignorar nos totais</span>
+          <span className="mt-0.5 block text-[11px] font-semibold text-[var(--muted)]">Use quando essa saída já foi registrada em Contas.</span>
+        </span>
+        <Toggle checked={Boolean(draft.ignored)} onChange={(ignored) => update({ ignored })} />
+      </div>
+      <div className="mt-5 flex flex-wrap justify-between gap-3">
+        {expense && onDelete ? (
+          <button
+            type="button"
+            onClick={() => {
+              onDelete(expense.id);
+              onClose();
+            }}
+            className="rounded-2xl border border-red-500/20 px-4 py-2.5 text-xs font-extrabold text-red-600"
+          >
+            Excluir
+          </button>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={() => {
+            onSave({ ...draft, name: draft.name.trim() || "Gasto variável" });
+            onClose();
+          }}
+          className="rounded-2xl bg-[#d75c27] px-5 py-2.5 text-xs font-extrabold text-white"
+        >
+          Salvar gasto
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function ObjectiveModal({
   selectedMonth,
   onClose,
@@ -7887,7 +8115,7 @@ function NorthIADrawer({
       return `Você pode guardar uma parte do valor livre: hoje há ${formatCurrency(freeToDecide)} para decidir. Eu começaria com uma reserva pequena e constante, sem comprometer contas pendentes.`;
     }
 
-    return `Olhei seu mês por três sinais: compromissos, atraso e folga. Hoje você tem ${metrics.overdueBills.length} atrasada(s), ${metrics.pendingBills.length} pendente(s), ${formatCurrency(metrics.totalPaid)} já pago e ${formatCurrency(freeToDecide)} livre para decidir. ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
+    return `Olhei seu mês por três sinais: compromissos, atraso e folga. Hoje você tem ${metrics.overdueBills.length} atrasada(s), ${metrics.pendingBills.length} pendente(s), ${formatCurrency(metrics.totalPaid)} em contas pagas, ${formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis e ${formatCurrency(freeToDecide)} livre para decidir. ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
   };
   const submitQuestion = (text = question) => {
     const clean = text.trim();
@@ -8798,8 +9026,8 @@ function DataPanel({
   const overdue = sum(overdueBills, (bill) => bill.expectedAmount);
   const saved = sum(filteredGoals, (goal) => goal.current);
   const free = Math.max(0, received - paid - pending - overdue - saved);
-  const periodMetrics = buildMetrics(buildPeriodMonthData(fromMonth, toMonth, incomes, bills, goals));
-  const previousPeriodMetrics = buildMetrics(buildPeriodMonthData(addMonths(fromMonth, -buildMonthRange(fromMonth, toMonth).length || -1), addMonths(fromMonth, -1), incomes, bills, goals));
+  const periodMetrics = buildMetrics(buildPeriodMonthData(fromMonth, toMonth, incomes, bills, goals, []));
+  const previousPeriodMetrics = buildMetrics(buildPeriodMonthData(addMonths(fromMonth, -buildMonthRange(fromMonth, toMonth).length || -1), addMonths(fromMonth, -1), incomes, bills, goals, []));
   const northScore = calculateNorthScore(periodMetrics, goals);
   const previousNorthScore = calculateNorthScore(previousPeriodMetrics, goals);
   const northScoreDelta = northScore - previousNorthScore;
@@ -9646,6 +9874,7 @@ function ActiveView({
   onOpenReserve,
   onOpenDataSettings,
   onOpenIncome,
+  onOpenVariableExpense,
   onOpenGoal,
   onNewGoal,
   debts,
@@ -9659,6 +9888,7 @@ function ActiveView({
   onSavePlanning,
   allIncomes,
   allBills,
+  allVariableExpenses,
   allGoals,
   user,
 }: {
@@ -9710,6 +9940,7 @@ function ActiveView({
   onOpenReserve: (goal: Goal) => void;
   onOpenDataSettings: () => void;
   onOpenIncome: (income: Income) => void;
+  onOpenVariableExpense: (expense: VariableExpense) => void;
   onOpenGoal: (goal: Goal) => void;
   onNewGoal: () => void;
   debts: NameCleanupDebt[];
@@ -9723,6 +9954,7 @@ function ActiveView({
   onSavePlanning: (planning: PlanningState) => void;
   allIncomes: Income[];
   allBills: Bill[];
+  allVariableExpenses: VariableExpense[];
   allGoals: Goal[];
   user: UserProfile;
 }) {
@@ -9809,6 +10041,15 @@ function ActiveView({
       />
     );
   }
+  if (active === "Gastos variáveis") {
+    return (
+      <VariableExpensesView
+        expenses={data.variableExpenses}
+        categories={categories}
+        onOpenExpense={onOpenVariableExpense}
+      />
+    );
+  }
   if (active === "Dívidas") {
     return (
       <DebtsView
@@ -9843,6 +10084,7 @@ function ActiveView({
         categories={categories}
         allIncomes={allIncomes}
         allBills={allBills}
+        allVariableExpenses={allVariableExpenses}
         allGoals={allGoals}
         realBalance={realBalance}
         onOpenFinanceDetail={onOpenFinanceDetail}
@@ -9908,6 +10150,11 @@ const viewCopy: Record<string, { eyebrow: string; title: string; description: st
     eyebrow: "Compromissos",
     title: "Contas do mês",
     description: "Filtre, acompanhe e marque pagamentos.",
+  },
+  "Gastos variáveis": {
+    eyebrow: "Extrato variável",
+    title: "Gastos variáveis",
+    description: "Mercado, combustível, padaria e compras que não são contas fixas.",
   },
   Saídas: {
     eyebrow: "Compromissos PJ",
@@ -9989,6 +10236,7 @@ export default function ReveeNorthApp() {
     }
   });
   const [bills, setBills] = useState<Bill[]>([]);
+  const [variableExpenses, setVariableExpenses] = useState<VariableExpense[]>([]);
   const [debts, setDebts] = useState<NameCleanupDebt[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -9998,6 +10246,7 @@ export default function ReveeNorthApp() {
   const [business, setBusiness] = useState<BusinessState>(() => defaultBusinessState());
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
+  const [selectedVariableExpense, setSelectedVariableExpense] = useState<VariableExpense | null>(null);
   const [selectedBusinessSale, setSelectedBusinessSale] = useState<BusinessSale | null>(null);
   const [selectedBusinessPayroll, setSelectedBusinessPayroll] = useState<BusinessPayroll | null>(null);
   const [selectedBusinessInvestment, setSelectedBusinessInvestment] = useState<BusinessInvestment | null>(null);
@@ -10009,6 +10258,7 @@ export default function ReveeNorthApp() {
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [realBalanceModalOpen, setRealBalanceModalOpen] = useState(false);
   const [incomeModalOpen, setIncomeModalOpen] = useState(false);
+  const [variableExpenseModalOpen, setVariableExpenseModalOpen] = useState(false);
   const [businessSaleModalOpen, setBusinessSaleModalOpen] = useState(false);
   const [businessPayrollModalOpen, setBusinessPayrollModalOpen] = useState(false);
   const [businessInvestmentModalOpen, setBusinessInvestmentModalOpen] = useState(false);
@@ -10096,6 +10346,7 @@ export default function ReveeNorthApp() {
     if (safeState.bills) {
       setBills((current) => preserveBillLogos(cleanupStuckFootballBillsOnce(safeState.bills!), current));
     }
+    if (safeState.variableExpenses) setVariableExpenses(safeState.variableExpenses);
     if (safeState.debts) setDebts(safeState.debts);
     if (safeState.incomes) setIncomes(safeState.incomes);
     if (safeState.goals) setGoals(safeState.goals);
@@ -10198,10 +10449,11 @@ export default function ReveeNorthApp() {
     accountCreatedAt,
     ...incomes.map((income) => income.receivedDate),
     ...bills.flatMap((bill) => [bill.dueDate, bill.paidDate]),
+    ...variableExpenses.map((expense) => expense.date),
     ...goals.map((goal) => goal.deadline),
     ...objectives.map((objective) => `${objective.month}-01`),
     ...debts.flatMap((debt) => [debt.createdAt, debt.paidAt]),
-  ]), [accountCreatedAt, bills, debts, goals, incomes, objectives]);
+  ]), [accountCreatedAt, bills, debts, goals, incomes, objectives, variableExpenses]);
   const earliestBusinessMonth = useMemo(() => earliestMonthFromDates([
     accountCreatedAt,
     ...business.sales.flatMap((sale) => [
@@ -10239,6 +10491,7 @@ export default function ReveeNorthApp() {
     user,
     realBalance,
     bills,
+    variableExpenses,
     debts,
     incomes,
     goals,
@@ -10256,6 +10509,7 @@ export default function ReveeNorthApp() {
   }), [
     accountCreatedAt,
     bills,
+    variableExpenses,
     categories,
     workspaceMode,
     business,
@@ -10311,12 +10565,14 @@ export default function ReveeNorthApp() {
       selectedMonth,
       bills: buildVisibleBills(bills, selectedMonth),
       incomes: incomes.filter((income) => monthKey(income.receivedDate) === selectedMonth),
+      variableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === selectedMonth),
       goals,
       objectives: objectives.filter((objective) => objective.month === selectedMonth),
       previousBills: bills.filter((bill) => monthKey(bill.dueDate) === previousMonth),
       previousIncomes: incomes.filter((income) => monthKey(income.receivedDate) === previousMonth),
+      previousVariableExpenses: variableExpenses.filter((expense) => monthKey(expense.date) === previousMonth),
     };
-  }, [bills, goals, incomes, objectives, selectedMonth]);
+  }, [bills, goals, incomes, objectives, selectedMonth, variableExpenses]);
 
   const metrics = useMemo(() => buildMetrics(data), [data]);
   const achievements = useMemo(() => buildAchievements(data, metrics), [data, metrics]);
@@ -10834,6 +11090,27 @@ export default function ReveeNorthApp() {
     });
   };
 
+  const handleSaveVariableExpense = (expense: VariableExpense) => {
+    setVariableExpenses((current) => {
+      const exists = current.some((item) => item.id === expense.id);
+      const nextExpenses = exists
+        ? current.map((item) => (item.id === expense.id ? expense : item))
+        : [expense, ...current];
+      persistCloudPatchNow({ variableExpenses: nextExpenses });
+      return nextExpenses;
+    });
+    showFeedback("Gasto salvo.", "O Dashboard já considera essa saída variável.");
+  };
+
+  const handleDeleteVariableExpense = (id: number) => {
+    setVariableExpenses((current) => {
+      const nextExpenses = current.filter((expense) => expense.id !== id);
+      persistCloudPatchNow({ variableExpenses: nextExpenses });
+      return nextExpenses;
+    });
+    showFeedback("Gasto removido.", "Os totais foram atualizados.");
+  };
+
   const handleToggleObjective = (id: number) => {
     const objective = objectives.find((item) => item.id === id);
     setObjectives((current) => {
@@ -10873,6 +11150,7 @@ export default function ReveeNorthApp() {
         const cleanBusiness = defaultBusinessState();
         const cleanRealBalance = { amount: 0, date: getTodayKey(), note: "" };
         setBills([]);
+        setVariableExpenses([]);
         setDebts([]);
         setIncomes([]);
         setGoals([]);
@@ -10882,6 +11160,7 @@ export default function ReveeNorthApp() {
         setRealBalance(cleanRealBalance);
         persistCloudPatchNow({
           bills: [],
+          variableExpenses: [],
           debts: [],
           incomes: [],
           goals: [],
@@ -10898,7 +11177,7 @@ export default function ReveeNorthApp() {
   const handleImportHistoricalBusinessSales = () => {
     confirmDanger(
       "Importar histórico enviado?",
-      `Isso vai deixar a base financeira somente com as ${historicalBusinessSalesImport.length} vendas da lista enviada. Entradas pessoais, contas, metas, reserva, investimentos, pró-labore e exemplos antigos serão zerados.`,
+      `Isso vai deixar a base financeira somente com as ${historicalBusinessSalesImport.length} vendas da lista enviada. Entradas pessoais, contas, gastos variáveis, metas, reserva, investimentos, pró-labore e exemplos antigos serão zerados.`,
       () => {
         const importedBusiness = {
           ...defaultBusinessState(),
@@ -10912,6 +11191,7 @@ export default function ReveeNorthApp() {
         };
         const cleanRealBalance = { amount: 0, date: getTodayKey(), note: "" };
         setBills([]);
+        setVariableExpenses([]);
         setDebts([]);
         setIncomes([]);
         setGoals([]);
@@ -10925,6 +11205,7 @@ export default function ReveeNorthApp() {
         setSelectedMonth(importStartMonth);
         persistCloudPatchNow({
           bills: [],
+          variableExpenses: [],
           debts: [],
           incomes: [],
           goals: [],
@@ -11203,6 +11484,10 @@ export default function ReveeNorthApp() {
                             setActive("Contas");
                             setBillCreateModalOpen(true);
                           }],
+                          [ShoppingCart, "Novo gasto variável", () => {
+                            setActive("Gastos variáveis");
+                            setVariableExpenseModalOpen(true);
+                          }],
                           [BadgeDollarSign, "Nova dívida", () => {
                             setActive("Dívidas");
                             setDebtModalOpen(true);
@@ -11300,6 +11585,7 @@ export default function ReveeNorthApp() {
             onOpenReserve={setReserveGoal}
             onOpenDataSettings={() => openSettings("dados")}
             onOpenIncome={setSelectedIncome}
+            onOpenVariableExpense={setSelectedVariableExpense}
             onOpenGoal={setSelectedGoal}
             onNewGoal={() => setGoalCreateModalOpen(true)}
             debts={debts}
@@ -11316,6 +11602,7 @@ export default function ReveeNorthApp() {
             }}
             allIncomes={incomes}
             allBills={bills}
+            allVariableExpenses={variableExpenses}
             allGoals={goals}
             user={user}
           />
@@ -11393,6 +11680,24 @@ export default function ReveeNorthApp() {
           onClose={() => setSelectedIncome(null)}
           onSave={handleSaveIncome}
           onDelete={handleDeleteIncome}
+        />
+      ) : null}
+      {variableExpenseModalOpen ? (
+        <VariableExpenseModal
+          categories={categories}
+          selectedMonth={selectedMonth}
+          onClose={() => setVariableExpenseModalOpen(false)}
+          onSave={handleSaveVariableExpense}
+        />
+      ) : null}
+      {selectedVariableExpense ? (
+        <VariableExpenseModal
+          expense={selectedVariableExpense}
+          categories={categories}
+          selectedMonth={selectedMonth}
+          onClose={() => setSelectedVariableExpense(null)}
+          onSave={handleSaveVariableExpense}
+          onDelete={handleDeleteVariableExpense}
         />
       ) : null}
       {billCreateModalOpen ? (
