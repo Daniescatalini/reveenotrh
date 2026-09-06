@@ -3166,7 +3166,9 @@ function IncomesView({
   onOpenIncome: (income: Income) => void;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const incomeGroups = ["Salário mensal", "Renda extra", "Bônus"];
+  const incomeGroups = Array.from(
+    new Set(["Salário mensal", "Renda extra", "Bônus", ...incomes.map((income) => income.category)]),
+  );
   const totalIncome = sum(incomes, (income) => income.amount);
   const categoryTotals = incomeGroups.map((label) => {
     const items = incomes.filter((income) => income.category === label);
@@ -5036,31 +5038,48 @@ function ReportsView({
   const paidBillsInSelectedMonth = allBills.filter(
     (bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === data.selectedMonth,
   );
-  const categoryTotals = Object.values(
-    paidBillsInSelectedMonth.reduce<Record<string, { label: string; value: number; color: string; count: number; bills: Bill[] }>>((acc, bill) => {
+  const variableExpensesInSelectedMonth = allVariableExpenses.filter(
+    (expense) => !expense.ignored && monthKey(expense.date) === data.selectedMonth,
+  );
+  type SpendingCategoryRow = { label: string; value: number; color: string; count: number; items: NonNullable<FinanceDetail["sections"][number]["items"]> };
+  const billCategoryTotals = Object.values(paidBillsInSelectedMonth.reduce<Record<string, SpendingCategoryRow>>((acc, bill) => {
       const category = findCategory(categories, bill.category, "conta");
       const label = category?.name ?? bill.category;
       const key = normalizeCategoryName(label);
-      acc[key] = acc[key] ?? { label, value: 0, color: category?.color ?? "#d75c27", count: 0, bills: [] };
+      acc[key] = acc[key] ?? { label, value: 0, color: category?.color ?? "#d75c27", count: 0, items: [] };
       acc[key].value += bill.paidAmount ?? bill.expectedAmount;
       acc[key].count += 1;
-      acc[key].bills.push(bill);
+      acc[key].items.push({
+        date: bill.paidDate ?? bill.dueDate,
+        label: bill.name,
+        helper: `Conta paga${isPaidLate(bill) ? ` com ${paidLateDays(bill)} dia(s) de atraso` : ""}`,
+        amount: bill.paidAmount ?? bill.expectedAmount,
+        tone: "out",
+      });
       acc[key].color = category?.color ?? acc[key].color;
       return acc;
-    }, {}),
-  )
-    .sort((a, b) => b.value - a.value);
-  const distributionItems = categoryTotals;
+    }, {})).sort((a, b) => b.value - a.value);
+  const variableCategoryTotalsByKey: Record<string, SpendingCategoryRow> = {};
+  variableExpensesInSelectedMonth.forEach((expense) => {
+    const category = findCategory(categories, expense.category, "variavel");
+    const label = category?.name ?? expense.category;
+    const key = normalizeCategoryName(label);
+    variableCategoryTotalsByKey[key] = variableCategoryTotalsByKey[key] ?? { label, value: 0, color: category?.color ?? "#d75c27", count: 0, items: [] };
+    variableCategoryTotalsByKey[key].value += expense.amount;
+    variableCategoryTotalsByKey[key].count += 1;
+    variableCategoryTotalsByKey[key].items.push({
+      date: expense.date,
+      label: expense.name,
+      helper: `Gasto variável${expense.imported ? " importado do extrato" : ""}`,
+      amount: expense.amount,
+      tone: "out",
+    });
+    variableCategoryTotalsByKey[key].color = category?.color ?? variableCategoryTotalsByKey[key].color;
+  });
+  const variableCategoryTotals = Object.values(variableCategoryTotalsByKey).sort((a, b) => b.value - a.value);
+  const distributionItems = [...billCategoryTotals, ...variableCategoryTotals];
   const visibleDistributionItems = showAllDistribution ? distributionItems : distributionItems.slice(0, 5);
   const distributionRealTotal = sum(distributionItems, (item) => item.value);
-  const distributionTotal = Math.max(distributionRealTotal, 1);
-  let angle = 0;
-  const conicGradient = distributionItems.length ? distributionItems.map((item) => {
-    const startAngle = angle;
-    const endAngle = startAngle + (item.value / distributionTotal) * 360;
-    angle = endAngle;
-    return `${item.color} ${startAngle}deg ${endAngle}deg`;
-  }).join(", ") : "#eee7e1 0deg 360deg";
   const trendMonths = buildMonthRange(addMonths(data.selectedMonth, -5), data.selectedMonth);
   const trendRows = trendMonths.map((month) => {
     const monthData = buildMonthDataFromLists(month, allIncomes, allBills, allGoals, [], allVariableExpenses);
@@ -5094,6 +5113,14 @@ function ReportsView({
       tone: isPaidLate(bill) ? "orange" : "green",
       action: "Contas pagas",
     })),
+    ...data.variableExpenses.filter((expense) => !expense.ignored).map((expense) => ({
+      date: expense.date,
+      icon: ShoppingCart,
+      title: `Gasto: ${expense.name}`,
+      detail: `- ${formatCurrency(expense.amount)}`,
+      tone: "orange",
+      action: expense.category,
+    })),
     ...metrics.overdueBills.map((bill) => ({
       date: bill.dueDate,
       icon: CircleAlert,
@@ -5117,7 +5144,7 @@ function ReportsView({
     { icon: Zap, label: "Dívidas", helper: `${metrics.overdueBills.length} aberta(s), ${metrics.paidLateBills.length} paga(s) com atraso`, value: debtHealth, status: metrics.overdueBills.length ? "Prioridade alta" : metrics.paidLateBills.length ? "Monitorar" : "Sob controle", color: "#ef4e3e" },
   ];
   const averagePaidLateDays = metrics.paidLateBills.length ? Math.round(totalPaidLateDays / metrics.paidLateBills.length) : 0;
-  const largestCategory = categoryTotals[0];
+  const largestCategory = distributionItems[0];
   const stoppedGoals = data.goals.filter((goal) => goal.current <= 0);
   const progressedGoals = data.goals.filter((goal) => goal.current > 0);
   const diagnosticNotes = [
@@ -5272,63 +5299,68 @@ function ReportsView({
         </Card>
 
         <Card className="p-5">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#211d19] dark:text-white">3. Distribuição do dinheiro</p>
-          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Para onde seu dinheiro foi destinado</p>
-          <div className="mt-5 grid gap-5 sm:grid-cols-[190px_1fr] sm:items-center xl:grid-cols-1 2xl:grid-cols-[190px_1fr]">
-            <div className="relative mx-auto flex h-44 w-44 items-center justify-center rounded-full" style={{ background: `conic-gradient(${conicGradient})` }}>
-              <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white text-center shadow-inner dark:bg-[#211d19]">
-                <span className="text-[10px] font-bold text-[var(--muted)]">Total</span>
-                <span className="text-sm font-black">{formatCurrency(distributionRealTotal)}</span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {visibleDistributionItems.length ? visibleDistributionItems.map((item) => {
-                const percent = Math.round((item.value / distributionTotal) * 100);
-                return (
-                  <button
-                    type="button"
-                    key={item.label}
-                    onClick={() => onOpenFinanceDetail({
-                      title: item.label,
-                      value: item.value,
-                      description: "Contas pagas desta categoria no mês selecionado.",
-                      sections: [{
-                        title: "Contas pagas",
-                        total: item.value,
-                        items: item.bills.map((bill) => ({
-                          date: bill.paidDate ?? bill.dueDate,
-                          label: bill.name,
-                          helper: isPaidLate(bill) ? `Pago com ${paidLateDays(bill)} dia(s) de atraso` : "Pago em dia",
-                          amount: bill.paidAmount ?? bill.expectedAmount,
-                          tone: "out" as const,
-                        })),
-                      }],
-                    })}
-                    className="group flex w-full items-center justify-between gap-3 rounded-2xl border-b border-[#211d19]/8 px-2 py-2 text-left transition hover:bg-[#211d19]/4 last:border-b-0 dark:border-white/10 dark:hover:bg-white/7"
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-extrabold">{item.label}</span>
-                        <span className="text-xs font-semibold text-[var(--muted)]">{formatCurrency(item.value)} • {item.count} conta(s)</span>
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-2 text-sm font-black">
-                      {percent}%
-                      <ChevronRight className="h-3.5 w-3.5 text-[var(--muted)] opacity-0 transition group-hover:opacity-100" />
-                    </span>
-                  </button>
-                );
-              }) : (
-                <div className="rounded-2xl border border-[var(--line)] bg-white/45 p-4 text-sm font-semibold text-[var(--muted)] dark:bg-white/5">
-                  Nenhuma conta paga registrada neste mês.
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#211d19] dark:text-white">3. Detalhamento de saídas</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Contas pagas e gastos variáveis ficam separados</p>
+          <div className="mt-5 space-y-5">
+            {[
+              { title: "Contas pagas", total: sum(billCategoryTotals, (item) => item.value), items: billCategoryTotals, empty: "Nenhuma conta paga neste mês." },
+              { title: "Gastos variáveis", total: sum(variableCategoryTotals, (item) => item.value), items: variableCategoryTotals, empty: "Nenhum gasto variável neste mês." },
+            ].map((section) => {
+              const maxSectionTotal = Math.max(1, ...section.items.map((item) => item.value));
+              const visibleItems = showAllDistribution ? section.items : section.items.slice(0, 6);
+              return (
+                <div key={section.title} className="rounded-3xl border border-[var(--line)] bg-white/35 p-3 dark:bg-white/5">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-extrabold">{section.title}</p>
+                    <p className="text-sm font-black text-[#d75c27]">{formatCurrency(section.total)}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {visibleItems.length ? visibleItems.map((item) => (
+                      <button
+                        type="button"
+                        key={`${section.title}-${item.label}`}
+                        onClick={() => onOpenFinanceDetail({
+                          title: `${section.title}: ${item.label}`,
+                          value: item.value,
+                          description: "Clique nas transações para conferir datas e valores.",
+                          sections: [{
+                            title: item.label,
+                            total: item.value,
+                            items: [...item.items].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")),
+                          }],
+                        })}
+                        className="group grid w-full grid-cols-[1fr_auto] items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-[#211d19]/4 dark:hover:bg-white/7"
+                      >
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
+                            <span className="truncate text-xs font-extrabold">{item.label}</span>
+                          </span>
+                          <span className="mt-1 block h-2 overflow-hidden rounded-full bg-[#211d19]/8 dark:bg-white/10">
+                            <span className="block h-full rounded-full" style={{ width: `${Math.max(3, (item.value / maxSectionTotal) * 100)}%`, background: item.color }} />
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-2 text-right">
+                          <span>
+                            <span className="block text-xs font-black">{formatCurrency(item.value)}</span>
+                            <span className="block text-[10px] font-semibold text-[var(--muted)]">{item.count} lançamento(s)</span>
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 text-[var(--muted)] opacity-0 transition group-hover:opacity-100" />
+                        </span>
+                      </button>
+                    )) : (
+                      <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-3 text-xs font-semibold text-[var(--muted)] dark:bg-white/5">
+                        {section.empty}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              );
+            })}
           </div>
-          {distributionItems.length > 5 ? (
+          {distributionItems.length > 12 ? (
             <button type="button" onClick={() => setShowAllDistribution((current) => !current)} className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--line)] px-4 py-3 text-xs font-extrabold">
-              {showAllDistribution ? "Ver menos" : `Ver mais ${distributionItems.length - 5} categoria(s)`}
+              {showAllDistribution ? "Ver menos" : "Ver todas as categorias"}
               <ChevronRight className={`h-4 w-4 transition ${showAllDistribution ? "-rotate-90" : "rotate-90"}`} />
             </button>
           ) : null}
