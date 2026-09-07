@@ -1262,6 +1262,23 @@ function isShortTermRdbMovement(expense: VariableExpense) {
   return normalizeCategoryName(`${expense.name} ${expense.category} ${expense.notes ?? ""}`).includes("aplicacao rdb");
 }
 
+function normalizeKnownVariableExpense(expense: VariableExpense): VariableExpense {
+  const text = normalizeCategoryName(`${expense.name} ${expense.notes ?? ""}`);
+  if (text.includes("rosaliacakes")) return { ...expense, category: "Alimentação" };
+  return expense;
+}
+
+function applySameNameVariableCategory(current: VariableExpense[], expense: VariableExpense) {
+  const targetName = normalizeCategoryName(expense.name);
+  const previous = current.find((item) => item.id === expense.id);
+  const categoryChanged = previous && normalizeCategoryName(previous.category) !== normalizeCategoryName(expense.category);
+  return current.map((item) => {
+    if (item.id === expense.id) return normalizeKnownVariableExpense(expense);
+    if (!categoryChanged || normalizeCategoryName(item.name) !== targetName) return normalizeKnownVariableExpense(item);
+    return normalizeKnownVariableExpense({ ...item, category: expense.category });
+  });
+}
+
 function buildMetrics(data: MonthData) {
   const paidBills = data.paidThisMonthBills;
   const activeVariableExpenses = data.variableExpenses.filter((expense) => !expense.ignored && !isShortTermRdbMovement(expense));
@@ -11267,7 +11284,7 @@ export default function ReveeNorthApp() {
     if (safeState.bills) {
       setBills((current) => preserveBillLogos(cleanupStuckFootballBillsOnce(safeState.bills!), current));
     }
-    if (safeState.variableExpenses) setVariableExpenses(safeState.variableExpenses);
+    if (safeState.variableExpenses) setVariableExpenses(safeState.variableExpenses.map(normalizeKnownVariableExpense));
     if (safeState.debts) setDebts(safeState.debts);
     if (safeState.incomes) setIncomes(safeState.incomes);
     if (safeState.goals) setGoals(safeState.goals);
@@ -12019,8 +12036,8 @@ export default function ReveeNorthApp() {
     setVariableExpenses((current) => {
       const exists = current.some((item) => item.id === expense.id);
       const nextExpenses = exists
-        ? current.map((item) => (item.id === expense.id ? expense : item))
-        : [expense, ...current];
+        ? applySameNameVariableCategory(current, expense)
+        : [normalizeKnownVariableExpense(expense), ...current.map(normalizeKnownVariableExpense)];
       persistCloudPatchNow({ variableExpenses: nextExpenses });
       return nextExpenses;
     });
