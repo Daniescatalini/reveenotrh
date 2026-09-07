@@ -127,7 +127,7 @@ const navItems = [
   { label: "Balanço", icon: BarChart3 },
 ];
 
-const PAYROLL_PERSONAL_SYNC_START_MONTH = "2026-04";
+const PAYROLL_PERSONAL_SYNC_START_MONTH = "2026-01";
 
 const businessNavItems = [
   { label: "Dashboard", icon: LayoutDashboard },
