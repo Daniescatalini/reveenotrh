@@ -8665,10 +8665,8 @@ function CategoryModal({
           {colorOpen ? (
             <ColorPickerPopover
               value={draft.color}
-              onChange={(color) => {
-                setDraft((current) => ({ ...current, color }));
-                setColorOpen(false);
-              }}
+              onChange={(color) => setDraft((current) => ({ ...current, color }))}
+              onDone={() => setColorOpen(false)}
             />
           ) : null}
         </div>
@@ -9382,10 +9380,8 @@ function CategoriesSettings({
                   {colorPickerFor === category.id ? (
                     <ColorPickerPopover
                       value={category.color}
-                      onChange={(color) => {
-                        updateCategory(category.id, { color });
-                        setColorPickerFor(null);
-                      }}
+                      onChange={(color) => updateCategory(category.id, { color })}
+                      onDone={() => setColorPickerFor(null)}
                     />
                   ) : null}
                 </div>
@@ -9504,7 +9500,7 @@ function clampUnit(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-function ColorPickerPopover({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+function ColorPickerPopover({ value, onChange, onDone }: { value: string; onChange: (color: string) => void; onDone: () => void }) {
   const [hsv, setHsv] = useState(() => hexToHsv(value));
   const [custom, setCustom] = useState(() => normalizeHexColor(value));
   const saturationRef = useRef<HTMLDivElement>(null);
@@ -9547,7 +9543,12 @@ function ColorPickerPopover({ value, onChange }: { value: string; onChange: (col
   const pureHue = hsvToHex(hsv.h, 1, 1);
 
   return (
-    <div className="absolute right-0 top-9 z-20 w-72 rounded-2xl border border-[var(--line)] bg-white/95 p-3 shadow-2xl backdrop-blur-xl dark:bg-[#211d19]/95">
+    <div
+      className="absolute right-0 top-9 z-20 w-72 rounded-2xl border border-[var(--line)] bg-white/95 p-3 shadow-2xl backdrop-blur-xl dark:bg-[#211d19]/95"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
+    >
       <div
         ref={saturationRef}
         role="slider"
@@ -9627,6 +9628,13 @@ function ColorPickerPopover({ value, onChange }: { value: string; onChange: (col
           </button>
         </div>
       </label>
+      <button
+        type="button"
+        onClick={onDone}
+        className="mt-3 w-full rounded-xl bg-[#d75c27] px-3 py-2 text-xs font-extrabold text-white transition hover:bg-[#c65021]"
+      >
+        Concluir
+      </button>
     </div>
   );
 }
