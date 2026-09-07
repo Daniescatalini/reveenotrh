@@ -12304,7 +12304,15 @@ export default function ReveeNorthApp() {
                     return nextBusiness;
                   });
                 }) as Dispatch<SetStateAction<Category[]>>
-              : setCategories}
+              : ((updater) => {
+                  setCategories((current) => {
+                    const nextCategories = typeof updater === "function"
+                      ? updater(current)
+                      : updater;
+                    persistCloudPatchNow({ categories: nextCategories });
+                    return nextCategories;
+                  });
+                }) as Dispatch<SetStateAction<Category[]>>}
             settingsSection={settingsSection}
             setSettingsSection={setSettingsSection}
             preferences={preferences}
@@ -12589,7 +12597,11 @@ export default function ReveeNorthApp() {
               });
               return;
             }
-            setCategories((current) => [...current, category]);
+            setCategories((current) => {
+              const nextCategories = [...current, category];
+              persistCloudPatchNow({ categories: nextCategories });
+              return nextCategories;
+            });
           }}
         />
       ) : null}
