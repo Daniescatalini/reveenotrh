@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   ArrowDownLeft,
@@ -432,6 +432,7 @@ type ReveeNorthCloudState = {
   version: 1;
   updatedAt?: string;
   onboardingComplete: boolean;
+  activeView?: string;
   selectedMonth: string;
   accountCreatedAt: string;
   user: UserProfile;
@@ -9422,17 +9423,163 @@ function IconPicker({ onSelect }: { onSelect: (icon: string) => void }) {
   );
 }
 
+function normalizeHexColor(value: string) {
+  const clean = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(clean)) return clean.toLowerCase();
+  return "#d75c27";
+}
+
+function hexToRgb(value: string) {
+  const hex = normalizeHexColor(value).slice(1);
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+  return `#${[r, g, b].map((part) => Math.round(part).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function hexToHsv(value: string) {
+  const { r, g, b } = hexToRgb(value);
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+  let h = 0;
+
+  if (delta !== 0) {
+    if (max === rn) h = 60 * (((gn - bn) / delta) % 6);
+    else if (max === gn) h = 60 * ((bn - rn) / delta + 2);
+    else h = 60 * ((rn - gn) / delta + 4);
+  }
+
+  return {
+    h: h < 0 ? h + 360 : h,
+    s: max === 0 ? 0 : delta / max,
+    v: max,
+  };
+}
+
+function hsvToHex(h: number, s: number, v: number) {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+
+  return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+}
+
+function clampUnit(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
 function ColorPickerPopover({ value, onChange }: { value: string; onChange: (color: string) => void }) {
-  const [custom, setCustom] = useState(value);
+  const [hsv, setHsv] = useState(() => hexToHsv(value));
+  const [custom, setCustom] = useState(() => normalizeHexColor(value));
+  const saturationRef = useRef<HTMLDivElement>(null);
+  const hueRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setHsv(hexToHsv(value));
+    setCustom(normalizeHexColor(value));
+  }, [value]);
+
+  const commitColor = (nextHsv: { h: number; s: number; v: number }) => {
+    setHsv(nextHsv);
+    const nextColor = hsvToHex(nextHsv.h, nextHsv.s, nextHsv.v);
+    setCustom(nextColor);
+    onChange(nextColor);
+  };
+
+  const pickSaturation = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = saturationRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    commitColor({
+      h: hsv.h,
+      s: clampUnit((event.clientX - rect.left) / rect.width),
+      v: clampUnit(1 - (event.clientY - rect.top) / rect.height),
+    });
+  };
+
+  const pickHue = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = hueRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    commitColor({
+      ...hsv,
+      h: clampUnit((event.clientX - rect.left) / rect.width) * 360,
+    });
+  };
+
+  const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
+  const pureHue = hsvToHex(hsv.h, 1, 1);
 
   return (
-    <div className="absolute right-0 top-9 z-20 w-64 rounded-2xl border border-[var(--line)] bg-white/95 p-3 shadow-2xl backdrop-blur-xl dark:bg-[#211d19]/95">
-      <div className="grid grid-cols-6 gap-2">
+    <div className="absolute right-0 top-9 z-20 w-72 rounded-2xl border border-[var(--line)] bg-white/95 p-3 shadow-2xl backdrop-blur-xl dark:bg-[#211d19]/95">
+      <div
+        ref={saturationRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Intensidade da cor"
+        className="relative h-36 cursor-crosshair overflow-hidden rounded-2xl border border-white/70"
+        style={{
+          background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${pureHue})`,
+        }}
+        onPointerDown={pickSaturation}
+        onPointerMove={(event) => {
+          if (event.buttons === 1) pickSaturation(event);
+        }}
+      >
+        <span
+          className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: currentColor }}
+        />
+      </div>
+      <div
+        ref={hueRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Tom da cor"
+        className="relative mt-3 h-5 cursor-pointer rounded-full"
+        style={{
+          background:
+            "linear-gradient(to right, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444)",
+        }}
+        onPointerDown={pickHue}
+        onPointerMove={(event) => {
+          if (event.buttons === 1) pickHue(event);
+        }}
+      >
+        <span
+          className="absolute top-1/2 h-6 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.25)]"
+          style={{ left: `${(hsv.h / 360) * 100}%`, background: currentColor }}
+        />
+      </div>
+      <div className="mt-3 grid grid-cols-6 gap-2">
         {colorChoices.map((color) => (
           <button
             key={color}
             type="button"
-            onClick={() => onChange(color)}
+            onClick={() => {
+              setHsv(hexToHsv(color));
+              setCustom(color);
+              onChange(color);
+            }}
             className={`h-9 w-9 rounded-full border-2 transition hover:scale-105 ${
               value.toLowerCase() === color.toLowerCase() ? "border-[#211d19] ring-2 ring-[#d75c27]/25" : "border-white/80"
             }`}
@@ -9445,16 +9592,6 @@ function ColorPickerPopover({ value, onChange }: { value: string; onChange: (col
         <span className="text-[11px] font-bold text-[var(--muted)]">Cor personalizada</span>
         <div className="mt-2 flex gap-2">
           <input
-            type="color"
-            value={/^#[0-9a-fA-F]{6}$/.test(custom) ? custom : "#d75c27"}
-            onChange={(event) => {
-              setCustom(event.target.value);
-              onChange(event.target.value);
-            }}
-            className="h-9 w-10 cursor-pointer rounded-xl border border-[var(--line)] bg-white p-1 dark:bg-white/8"
-            aria-label="Selecionar cor personalizada"
-          />
-          <input
             value={custom}
             onChange={(event) => setCustom(event.target.value)}
             placeholder="#d75c27"
@@ -9462,7 +9599,11 @@ function ColorPickerPopover({ value, onChange }: { value: string; onChange: (col
           />
           <button
             type="button"
-            onClick={() => /^#[0-9a-fA-F]{6}$/.test(custom) && onChange(custom)}
+            onClick={() => {
+              if (!/^#[0-9a-fA-F]{6}$/.test(custom)) return;
+              setHsv(hexToHsv(custom));
+              onChange(custom.toLowerCase());
+            }}
             className="rounded-xl bg-[#211d19] px-3 py-2 text-[11px] font-extrabold text-white dark:bg-[#d75c27]"
           >
             Aplicar
@@ -10994,7 +11135,11 @@ export default function ReveeNorthApp() {
       ? localStorage.getItem("reveenorth:onboarding-complete") === "true"
       : false,
   );
-  const [active, setActive] = useState("Dashboard");
+  const [active, setActive] = useState(() =>
+    typeof window !== "undefined"
+      ? localStorage.getItem("reveenorth:active-view") ?? "Dashboard"
+      : "Dashboard",
+  );
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("personal");
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -11137,6 +11282,7 @@ export default function ReveeNorthApp() {
     if (safeState.security) setSecurity(safeState.security);
     if (typeof safeState.darkMode === "boolean") setDarkMode(safeState.darkMode);
     if (typeof safeState.sidebarCollapsed === "boolean") setSidebarCollapsed(safeState.sidebarCollapsed);
+    if (safeState.activeView) setActive(safeState.activeView);
     if (safeState.selectedMonth) setSelectedMonth(safeState.selectedMonth);
     if (typeof safeState.onboardingComplete === "boolean") setOnboardingComplete(safeState.onboardingComplete);
   };
@@ -11149,10 +11295,12 @@ export default function ReveeNorthApp() {
       const savedState = localStorage.getItem("reveenorth:app-state");
       const savedOnboarding = localStorage.getItem("reveenorth:onboarding-complete");
       const savedLoggedIn = localStorage.getItem("reveenorth:logged-in");
+      const savedActiveView = localStorage.getItem("reveenorth:active-view");
       if (savedState) applyCloudState(JSON.parse(savedState) as ReveeNorthCloudState);
       if (savedUser) setUser(JSON.parse(savedUser) as UserProfile);
       if (savedBalance) setRealBalance(JSON.parse(savedBalance) as RealBalance);
       if (!savedState && savedCategories) setCategories(JSON.parse(savedCategories) as Category[]);
+      if (!savedState && savedActiveView) setActive(savedActiveView);
       if (savedOnboarding === "true") setOnboardingComplete(true);
       if (savedLoggedIn === "true") setLoggedIn(true);
     } catch {
@@ -11206,6 +11354,10 @@ export default function ReveeNorthApp() {
   useEffect(() => {
     localStorage.setItem("reveenorth:user", JSON.stringify(user));
   }, [user]);
+
+  useEffect(() => {
+    localStorage.setItem("reveenorth:active-view", active);
+  }, [active]);
 
   useEffect(() => {
     localStorage.setItem("reveenorth:real-balance", JSON.stringify(realBalance));
@@ -11270,6 +11422,7 @@ export default function ReveeNorthApp() {
     version: 1,
     updatedAt: lastSavedAt,
     onboardingComplete,
+    activeView: active,
     selectedMonth,
     accountCreatedAt,
     user,
@@ -11292,6 +11445,7 @@ export default function ReveeNorthApp() {
     sidebarCollapsed,
   }), [
     accountCreatedAt,
+    active,
     bills,
     variableExpenses,
     categories,
@@ -12107,11 +12261,12 @@ export default function ReveeNorthApp() {
     await signOut(authSession);
     setAuthSession(null);
     localStorage.removeItem("reveenorth:logged-in");
+    localStorage.removeItem("reveenorth:active-view");
     setLoggedIn(false);
     setActive("Dashboard");
   };
 
-  if (!authReady) {
+  if (!authReady || (loggedIn && !cloudReady)) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#efefef] text-[#211d19]">
         <div className="text-center">
