@@ -103,10 +103,11 @@ export const initialCategories: Category[] = [
   { id: 34, name: "Combustível", icon: "Fuel", color: "#ea580c", type: "variavel", active: true },
   { id: 35, name: "Jogos", icon: "Gamepad2", color: "#7c3aed", type: "variavel", active: true },
   { id: 36, name: "Barbearia e beleza", icon: "Scissors", color: "#be185d", type: "variavel", active: true },
-  { id: 37, name: "Mobilidade", icon: "Landmark", color: "#475569", type: "variavel", active: true },
+  { id: 37, name: "Pedágio", icon: "Landmark", color: "#475569", type: "variavel", active: true },
   { id: 38, name: "Transferências internas", icon: "RefreshCw", color: "#94a3b8", type: "variavel", active: true },
   { id: 39, name: "Outros", icon: "MoreVertical", color: "#64748b", type: "variavel", active: true },
   { id: 40, name: "Mesada", icon: "HandCoins", color: "#0f766e", type: "variavel", active: true },
+  { id: 41, name: "Estacionamento", icon: "ParkingCircle", color: "#334155", type: "variavel", active: true },
 ];
 
 export const initialIncomes: Income[] = [

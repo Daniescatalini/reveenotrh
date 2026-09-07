@@ -565,10 +565,25 @@ function normalizeCategoryName(value: string) {
 
 function findCategory(categories: Category[], name: string, type?: Category["type"]) {
   const normalized = normalizeCategoryName(name);
-  return categories.find(
+  const direct = categories.find(
     (category) =>
       (!type || category.type === type) &&
       normalizeCategoryName(category.name) === normalized,
+  );
+  if (direct) return direct;
+  const aliases: Record<string, string> = {
+    restaurantes: "alimentacao",
+    "restaurantes e padaria": "alimentacao",
+    padaria: "alimentacao",
+    estacionamento: "estacionamento",
+    "pedagio e estacionamento": "pedagio",
+  };
+  const alias = aliases[normalized];
+  if (!alias) return undefined;
+  return categories.find(
+    (category) =>
+      (!type || category.type === type) &&
+      normalizeCategoryName(category.name) === alias,
   );
 }
 
@@ -1217,9 +1232,23 @@ function mergeDefaultCategories(current: Category[]) {
     if (category.type === "conta" && name === "esporte" && category.icon === "Volleyball") {
       return { ...category, icon: "SoccerBall" };
     }
+    if (category.type === "variavel" && (name === "restaurantes" || name === "restaurantes e padaria")) {
+      return { ...category, name: "Alimentação", icon: category.icon || "Utensils" };
+    }
+    if (category.type === "variavel" && name === "pedagio e estacionamento") {
+      return { ...category, name: "Pedágio", icon: category.icon || "Landmark" };
+    }
     return category;
   });
-  return migrated.length ? migrated : initialCategories;
+  const withDefaults = migrated.length ? migrated : initialCategories;
+  return withDefaults.filter(
+    (category, index, list) =>
+      list.findIndex(
+        (item) =>
+          item.type === category.type &&
+          normalizeCategoryName(item.name) === normalizeCategoryName(category.name),
+      ) === index,
+  );
 }
 
 function isShortTermRdbMovement(expense: VariableExpense) {
