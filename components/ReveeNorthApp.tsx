@@ -118,13 +118,13 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
   { label: "Entradas", icon: ArrowDownLeft },
   { label: "Contas", icon: ReceiptText },
-  { label: "Gastos variáveis", icon: ShoppingCart },
+  { label: "Variáveis", icon: ShoppingCart },
   { label: "Dívidas", icon: BadgeDollarSign },
   { label: "Metas", icon: Target },
   { label: "Objetivos do mês", icon: Flag },
   { label: "Planejamento", icon: LineChart },
-  { label: "Balanço", icon: BarChart3 },
   { label: "Relatórios", icon: FileText },
+  { label: "Balanço", icon: BarChart3 },
 ];
 
 const PAYROLL_PERSONAL_SYNC_START_MONTH = "2026-04";
@@ -1222,9 +1222,13 @@ function mergeDefaultCategories(current: Category[]) {
   return migrated.length ? migrated : initialCategories;
 }
 
+function isShortTermRdbMovement(expense: VariableExpense) {
+  return normalizeCategoryName(`${expense.name} ${expense.category} ${expense.notes ?? ""}`).includes("aplicacao rdb");
+}
+
 function buildMetrics(data: MonthData) {
   const paidBills = data.paidThisMonthBills;
-  const activeVariableExpenses = data.variableExpenses.filter((expense) => !expense.ignored);
+  const activeVariableExpenses = data.variableExpenses.filter((expense) => !expense.ignored && !isShortTermRdbMovement(expense));
   const pendingBills = data.bills.filter((bill) => bill.status === "pendente").sort(sortByPaymentPriority);
   const overdueBills = data.bills.filter((bill) => bill.status === "atrasada").sort(sortByPaymentPriority);
   const paidOnTimeBills = paidBills.filter((bill) => !isPaidLate(bill));
@@ -1302,38 +1306,32 @@ function buildMetrics(data: MonthData) {
   };
 }
 
-function buildDefaultPlanningState(metrics: ReturnType<typeof buildMetrics>, rules: CalculatorRules): PlanningState {
-  const plannedIncome = metrics.totalIncome || 6290;
-  const billsBudget = plannedIncome * (rules.bills / 100);
-  const personalBudget = plannedIncome * (rules.personal / 100);
-  const goalsBudget = plannedIncome * (rules.goals / 100);
-  const reserveBudget = plannedIncome * (rules.reserve / 100);
-  const overdueBudget = Math.min(metrics.totalOverdue, billsBudget * 0.3);
-  const remainingBillsBudget = Math.max(0, billsBudget - overdueBudget);
+const DEFAULT_PLANNING_GOAL_TITLES = new Set(["guardar na reserva", "quitar energia", "comprar oculos", "trocar celular"]);
+const DEFAULT_PLANNING_EXPENSE_TITLES = new Set(["festa junina davi", "presente aniversario", "manutencao do carro", "mercado extra"]);
+
+function sanitizePlanningState(planning: PlanningState): PlanningState {
+  return {
+    ...planning,
+    monthGoals: planning.monthGoals.filter((goal) => !DEFAULT_PLANNING_GOAL_TITLES.has(normalizeCategoryName(goal.title))),
+    expectedExpenses: planning.expectedExpenses.filter((expense) => !DEFAULT_PLANNING_EXPENSE_TITLES.has(normalizeCategoryName(expense.title))),
+  };
+}
+
+function buildDefaultPlanningState(metrics: ReturnType<typeof buildMetrics>, _rules: CalculatorRules): PlanningState {
+  const plannedIncome = metrics.totalIncome;
+  const openBills = metrics.totalPending + metrics.totalOverdue;
   return {
     plannedIncome,
     style: "equilibrado",
     distribution: [
-      { id: "essenciais", label: "Essenciais", helper: "Contas fixas e moradia", value: Math.round(remainingBillsBudget * 0.62), icon: "Home", tone: "orange" },
-      { id: "alimentacao", label: "Alimentação", helper: "Mercado, restaurantes", value: Math.round(remainingBillsBudget * 0.22), icon: "ShoppingCart", tone: "green" },
-      { id: "transporte", label: "Transporte", helper: "Combustível, apps, manutenção", value: Math.round(remainingBillsBudget * 0.16), icon: "Car", tone: "blue" },
-      { id: "lazer", label: "Lazer", helper: "Diversão, hobbies, passeios", value: Math.round(personalBudget), icon: "Heart", tone: "red" },
-      { id: "reserva", label: "Reserva", helper: "Reserva de emergência", value: Math.round(reserveBudget), icon: "Shield", tone: "green" },
-      { id: "metas", label: "Metas", helper: "Sonhos e objetivos", value: Math.round(goalsBudget), icon: "Target", tone: "purple" },
-      { id: "atrasadas", label: "Contas atrasadas", helper: "Dívidas e pendências", value: Math.round(overdueBudget), icon: "Zap", tone: "red" },
+      { id: "contas-pagas", label: "Contas pagas", helper: "Pagamentos registrados no mês", value: Math.round(metrics.totalPaid), icon: "ReceiptText", tone: "orange" },
+      { id: "contas-abertas", label: "Contas abertas", helper: "Pendentes e atrasadas do mês", value: Math.round(openBills), icon: "Zap", tone: openBills > 0 ? "red" : "neutral" },
+      { id: "variaveis", label: "Variáveis", helper: "Mercado, iFood, combustível e compras", value: Math.round(metrics.totalVariableExpenses), icon: "ShoppingCart", tone: "green" },
+      { id: "reserva", label: "Reserva", helper: "Dinheiro realmente guardado", value: Math.round(metrics.reserveDestination), icon: "Shield", tone: "green" },
+      { id: "metas", label: "Metas", helper: "Valores guardados nas metas", value: Math.round(metrics.goalsDestination), icon: "Target", tone: "purple" },
     ],
-    monthGoals: [
-      { id: 1, title: "Guardar na reserva", helper: "Ter mais segurança financeira.", amount: 500, done: true },
-      { id: 2, title: "Quitar Energia", helper: "Evitar juros e pendências.", amount: 210, done: true },
-      { id: 3, title: "Comprar óculos", helper: "Melhorar minha qualidade de vida.", amount: 450, done: false },
-      { id: 4, title: "Trocar celular", helper: "Planejado para o segundo semestre.", amount: 1800, done: false },
-    ],
-    expectedExpenses: [
-      { id: 1, title: "Festa Junina Davi", amount: 250 },
-      { id: 2, title: "Presente aniversário", amount: 120 },
-      { id: 3, title: "Manutenção do carro", amount: 300 },
-      { id: 4, title: "Mercado extra", amount: 200 },
-    ],
+    monthGoals: [],
+    expectedExpenses: [],
   };
 }
 
@@ -2603,7 +2601,7 @@ function TopVariableSpendingCard({
             <ShoppingCart className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d75c27]">Gastos variáveis</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d75c27]">Variáveis</p>
             <h3 className="mt-2 text-lg font-extrabold">Onde o dinheiro saiu solto</h3>
             <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{formatCurrency(total)} no mês</p>
           </div>
@@ -2617,7 +2615,7 @@ function TopVariableSpendingCard({
               type="button"
               key={item.label}
               onClick={() => onOpenFinanceDetail({
-                title: `Gastos variáveis: ${item.label}`,
+                title: `Variáveis: ${item.label}`,
                 value: item.total,
                 description: "Todos os gastos dessa categoria no mês.",
                 sections: [{
@@ -2645,7 +2643,7 @@ function TopVariableSpendingCard({
           );
         }) : (
           <div className="rounded-2xl border border-[var(--line)] bg-white/45 p-4 dark:bg-white/6">
-            <p className="text-sm font-extrabold">Nenhum gasto variável lançado.</p>
+            <p className="text-sm font-extrabold">Nenhum lançamento variável lançado.</p>
             <p className="mt-1 text-xs font-semibold leading-5 text-[var(--muted)]">Quando importar ou cadastrar mercado, iFood, combustível e compras, os maiores aparecem aqui.</p>
           </div>
         )}
@@ -2939,13 +2937,13 @@ function Dashboard({
     if (metrics.overdueBills.length) {
       return {
         headline: "Primeiro, tirar peso do caminho.",
-        body: `Dani, a prioridade é resolver ${name}. Existem ${metrics.overdueBills.length} conta(s) atrasada(s), somando ${formatCurrency(metrics.totalOverdue)}. Depois disso, o saldo e os gastos variáveis ficam muito mais claros.`,
+        body: `Dani, a prioridade é resolver ${name}. Existem ${metrics.overdueBills.length} conta(s) atrasada(s), somando ${formatCurrency(metrics.totalOverdue)}. Depois disso, o saldo e os variáveis ficam muito mais claros.`,
       };
     }
     if (outRatio > 0.9 && topVariable) {
       return {
         headline: "Seu dinheiro está saindo rápido.",
-        body: `Entrou ${formatCurrency(metrics.totalIncome)} e saiu ${formatCurrency(totalOut)}. O maior gasto variável foi ${topVariable.label}, com ${formatCurrency(topVariable.total)}. Hoje o melhor ajuste é reduzir esse grupo antes de assumir novas compras.`,
+        body: `Entrou ${formatCurrency(metrics.totalIncome)} e saiu ${formatCurrency(totalOut)}. O maior lançamento variável foi ${topVariable.label}, com ${formatCurrency(topVariable.total)}. Hoje o melhor ajuste é reduzir esse grupo antes de assumir novas compras.`,
       };
     }
     if (metrics.pendingBills.length) {
@@ -2957,12 +2955,12 @@ function Dashboard({
     if (metrics.reserveDestination <= 0) {
       return {
         headline: "O próximo avanço é criar respiro.",
-        body: `Sem contas atrasadas agora. A melhor próxima decisão é começar a reserva, mesmo pequena, e acompanhar os gastos variáveis para não deixar mercado, iFood ou combustível comerem a folga.`,
+        body: `Sem contas atrasadas agora. A melhor próxima decisão é começar a reserva, mesmo pequena, e acompanhar os variáveis para não deixar mercado, iFood ou combustível comerem a folga.`,
       };
     }
     return {
       headline: "Seu mês está sob controle.",
-      body: `Você registrou ${formatCurrency(metrics.totalIncome)} em entradas, ${formatCurrency(metrics.totalPaid)} em contas pagas e ${formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis. Próximo passo: manter a reserva e revisar ${topVariable?.label ?? "os gastos variáveis"}.`,
+      body: `Você registrou ${formatCurrency(metrics.totalIncome)} em entradas, ${formatCurrency(metrics.totalPaid)} em contas pagas e ${formatCurrency(metrics.totalVariableExpenses)} em variáveis. Próximo passo: manter a reserva e revisar ${topVariable?.label ?? "os variáveis"}.`,
     };
   }, [categories, metrics.pendingBills.length, metrics.reserveDestination, metrics.totalIncome, metrics.totalOut, metrics.totalOverdue, metrics.totalPaid, metrics.totalPending, metrics.totalVariableExpenses, metrics.unassignedValue, metrics.urgent?.name, metrics.variableExpenses, metrics.overdueBills.length, urgentDay]);
 
@@ -3047,7 +3045,7 @@ function Dashboard({
         <DashboardMetricCard
           label="Saídas do mês"
           value={formatCurrency(metrics.totalOut)}
-          helper="Contas pagas e gastos variáveis"
+          helper="Contas pagas e variáveis"
           detail={`${metrics.spendingDelta > 0 ? "↑" : "↓"} ${Math.abs(metrics.spendingDelta)}% vs mês anterior`}
           icon={ArrowUpRight}
           tone="orange"
@@ -3140,7 +3138,7 @@ function buildFinanceDetail(
       sections: [
         { title: "Entradas do mês", total: metrics.totalIncome, items: incomeItems },
         { title: "Contas pagas", total: metrics.totalPaid, items: paidItems },
-        { title: "Gastos variáveis", total: metrics.totalVariableExpenses, items: variableExpenseItems },
+        { title: "Variáveis", total: metrics.totalVariableExpenses, items: variableExpenseItems },
         {
           title: "Ajustes manuais",
           total: realBalance.amount,
@@ -3174,7 +3172,7 @@ function buildFinanceDetail(
       description: "Tudo que saiu de fato da conta no período.",
       sections: [
         { title: "Contas pagas", total: metrics.totalPaid, items: paidItems },
-        { title: "Gastos variáveis", total: metrics.totalVariableExpenses, items: variableExpenseItems },
+        { title: "Variáveis", total: metrics.totalVariableExpenses, items: variableExpenseItems },
       ],
     };
   }
@@ -3466,7 +3464,9 @@ function VariableExpensesView({
     ).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })),
   ];
   const visibleExpenses = expenses.filter(
-    (expense) => categoryFilter === "todas" || normalizeCategoryName(expense.category) === normalizeCategoryName(categoryFilter),
+    (expense) =>
+      !isShortTermRdbMovement(expense) &&
+      (categoryFilter === "todas" || normalizeCategoryName(expense.category) === normalizeCategoryName(categoryFilter)),
   );
   const activeExpenses = visibleExpenses.filter((expense) => !expense.ignored);
   const ignoredExpenses = visibleExpenses.filter((expense) => expense.ignored);
@@ -3499,7 +3499,7 @@ function VariableExpensesView({
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="p-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Gastos variáveis</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d75c27]">Variáveis</p>
           <p className="mt-2 text-2xl font-black">{formatCurrency(total)}</p>
             <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{activeExpenses.length} lançamento(s) no filtro</p>
         </Card>
@@ -3519,7 +3519,7 @@ function VariableExpensesView({
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Extrato variável</p>
-            <h3 className="mt-2 text-lg font-extrabold">Mercado, combustível, padaria e compras soltas.</h3>
+            <h3 className="mt-2 text-lg font-extrabold">Mercado, iFood, combustível e compras soltas.</h3>
             {selectedIds.length ? (
               <p className="mt-1 text-xs font-bold text-[var(--muted)]">
                 {selectedIds.length} selecionado(s) • {formatCurrency(selectedTotal)}
@@ -3581,7 +3581,7 @@ function VariableExpensesView({
             ) : null}
             <button
               type="button"
-              onClick={() => downloadCsv(`gastos-variaveis-${selectedMonth}.csv`, exportRows)}
+              onClick={() => downloadCsv(`variaveis-${selectedMonth}.csv`, exportRows)}
               disabled={!visibleExpenses.length}
               className="inline-flex items-center gap-2 rounded-2xl border border-[#d75c27]/20 bg-white/60 px-4 py-2 text-xs font-extrabold text-[#d75c27] transition hover:border-[#d75c27]/40 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white/8"
             >
@@ -3639,7 +3639,7 @@ function VariableExpensesView({
             })}
           {!visibleExpenses.length ? (
             <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-5 text-sm font-semibold text-[var(--muted)] dark:bg-white/6">
-              Nenhum gasto variável encontrado neste filtro.
+              Nenhum lançamento encontrado neste filtro.
             </p>
           ) : null}
         </div>
@@ -4137,7 +4137,7 @@ function PersonalBalanceView({
       return acc;
     }, {})).sort((a, b) => b.total - a.total);
   const groupVariables = Object.values(allVariableExpenses
-    .filter((expense) => !expense.ignored && expense.date.slice(0, 4) === balanceYear)
+    .filter((expense) => !expense.ignored && !isShortTermRdbMovement(expense) && expense.date.slice(0, 4) === balanceYear)
     .reduce<Record<string, { label: string; total: number; items: FinanceDetail["sections"][number]["items"] }>>((acc, expense) => {
       const category = findCategory(categories, expense.category, "variavel");
       const label = category?.name ?? expense.category;
@@ -4160,7 +4160,7 @@ function PersonalBalanceView({
   const sections = [
     { title: "Entradas por categoria", total: totalIncome, items: groupIncomes, empty: "Nenhuma entrada neste ano." },
     { title: "Contas pagas por categoria", total: totalPaidBills, items: groupBills, empty: "Nenhuma conta paga neste ano." },
-    { title: "Gastos variáveis por categoria", total: totalVariable, items: groupVariables, empty: "Nenhum gasto variável neste ano." },
+    { title: "Variáveis por categoria", total: totalVariable, items: groupVariables, empty: "Nenhum lançamento variável neste ano." },
   ];
 
   return (
@@ -4169,7 +4169,7 @@ function PersonalBalanceView({
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d75c27]">Filtro anual</p>
           <h3 className="mt-1 text-lg font-extrabold">Balanço pessoal de {balanceYear}</h3>
-          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Resumo do ano com contas e gastos variáveis separados.</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Resumo do ano com contas e variáveis separados.</p>
         </div>
         <label className="inline-flex w-fit items-center gap-2 rounded-2xl border border-[var(--line)] bg-white/60 px-4 py-3 text-sm font-extrabold dark:bg-white/6">
           <CalendarDays className="h-4 w-4 text-[#d75c27]" />
@@ -4182,7 +4182,7 @@ function PersonalBalanceView({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <BusinessMetricCard label="Entrou no ano" value={formatCurrency(totalIncome)} helper="Salário, renda extra e bônus" icon={Wallet} />
         <BusinessMetricCard label="Contas pagas" value={formatCurrency(totalPaidBills)} helper="Somente contas quitadas" icon={ReceiptText} tone="blue" />
-        <BusinessMetricCard label="Gastos variáveis" value={formatCurrency(totalVariable)} helper="Mercado, iFood, compras e afins" icon={ShoppingCart} tone="amber" />
+        <BusinessMetricCard label="Variáveis" value={formatCurrency(totalVariable)} helper="Mercado, iFood, compras e afins" icon={ShoppingCart} tone="amber" />
         <BusinessMetricCard label="Falta pagar" value={formatCurrency(pendingTotal)} helper="Contas abertas do ano" icon={CircleAlert} tone="dark" />
         <BusinessMetricCard label="Metas guardadas" value={formatCurrency(goalTotal)} helper="Valor atual em metas do ano" icon={PiggyBank} />
       </div>
@@ -4224,7 +4224,7 @@ function PersonalBalanceView({
           <div className="mt-5 space-y-3 text-sm font-bold">
             <div className="flex justify-between gap-3"><span>Entrou</span><span className="text-emerald-700">{formatCurrency(totalIncome)}</span></div>
             <div className="flex justify-between gap-3"><span>Contas pagas</span><span className="text-[#d75c27]">{formatCurrency(totalPaidBills)}</span></div>
-            <div className="flex justify-between gap-3"><span>Gastos variáveis</span><span className="text-[#d75c27]">{formatCurrency(totalVariable)}</span></div>
+            <div className="flex justify-between gap-3"><span>Variáveis</span><span className="text-[#d75c27]">{formatCurrency(totalVariable)}</span></div>
             <div className="h-px bg-[#211d19]/8 dark:bg-white/10" />
             <div className="flex justify-between gap-3 text-base font-black"><span>Sobra contábil do ano</span><span>{formatCurrency(totalIncome - totalOut)}</span></div>
             <p className="text-[11px] font-semibold leading-5 text-[var(--muted)]">
@@ -4243,8 +4243,8 @@ function PersonalBalanceView({
                 <h3 className="mt-2 text-lg font-extrabold">{formatCurrency(section.total)}</h3>
               </div>
             </div>
-            <div className="space-y-2">
-              {section.items.length ? section.items.slice(0, 8).map((item) => (
+            <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
+              {section.items.length ? section.items.map((item) => (
                 <button
                   key={`${section.title}-${item.label}`}
                   type="button"
@@ -5465,7 +5465,7 @@ function ReportsView({
     (bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === data.selectedMonth,
   );
   const variableExpensesInSelectedMonth = allVariableExpenses.filter(
-    (expense) => !expense.ignored && monthKey(expense.date) === data.selectedMonth,
+    (expense) => !expense.ignored && !isShortTermRdbMovement(expense) && monthKey(expense.date) === data.selectedMonth,
   );
   type SpendingCategoryRow = { label: string; value: number; color: string; count: number; items: NonNullable<FinanceDetail["sections"][number]["items"]> };
   const billCategoryTotals = Object.values(paidBillsInSelectedMonth.reduce<Record<string, SpendingCategoryRow>>((acc, bill) => {
@@ -5496,7 +5496,7 @@ function ReportsView({
     variableCategoryTotalsByKey[key].items.push({
       date: expense.date,
       label: expense.name,
-      helper: `Gasto variável${expense.imported ? " importado do extrato" : ""}`,
+                helper: `Variável${expense.imported ? " importado do extrato" : ""}`,
       amount: expense.amount,
       tone: "out",
     });
@@ -5539,7 +5539,7 @@ function ReportsView({
       tone: isPaidLate(bill) ? "orange" : "green",
       action: "Contas pagas",
     })),
-    ...data.variableExpenses.filter((expense) => !expense.ignored).map((expense) => ({
+    ...data.variableExpenses.filter((expense) => !expense.ignored && !isShortTermRdbMovement(expense)).map((expense) => ({
       date: expense.date,
       icon: ShoppingCart,
       title: `Gasto: ${expense.name}`,
@@ -5634,7 +5634,7 @@ function ReportsView({
             <div>
               <h3 className="text-[1.35rem] font-extrabold leading-tight tracking-tight sm:text-2xl">Relatório real de {reportMonth}</h3>
               <p className="mt-2 max-w-2xl text-[0.82rem] font-medium leading-5 text-white/76 sm:mt-3 sm:text-sm sm:font-semibold sm:leading-6">
-                Você registrou {formatCurrency(metrics.totalIncome)} em entradas, pagou {paidCount} conta(s), teve {formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis, guardou {formatCurrency(totalSaved)} em metas e terminou com {formatCurrency(metrics.projectedBalance)} de saldo previsto.
+                Você registrou {formatCurrency(metrics.totalIncome)} em entradas, pagou {paidCount} conta(s), teve {formatCurrency(metrics.totalVariableExpenses)} em variáveis, guardou {formatCurrency(totalSaved)} em metas e terminou com {formatCurrency(metrics.projectedBalance)} de saldo previsto.
               </p>
               <button
                 type="button"
@@ -5726,11 +5726,11 @@ function ReportsView({
 
         <Card className="p-5">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#211d19] dark:text-white">3. Detalhamento de saídas</p>
-          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Contas pagas e gastos variáveis ficam separados</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Contas pagas e variáveis ficam separados.</p>
           <div className="mt-5 space-y-5">
             {[
               { title: "Contas pagas", total: sum(billCategoryTotals, (item) => item.value), items: billCategoryTotals, empty: "Nenhuma conta paga neste mês." },
-              { title: "Gastos variáveis", total: sum(variableCategoryTotals, (item) => item.value), items: variableCategoryTotals, empty: "Nenhum gasto variável neste mês." },
+              { title: "Variáveis", total: sum(variableCategoryTotals, (item) => item.value), items: variableCategoryTotals, empty: "Nenhum lançamento variável neste mês." },
             ].map((section) => {
               const maxSectionTotal = Math.max(1, ...section.items.map((item) => item.value));
               const visibleItems = showAllDistribution ? section.items : section.items.slice(0, 6);
@@ -7524,7 +7524,7 @@ function VariableExpenseModal({
   const update = (patch: Partial<VariableExpense>) => setDraft((current) => ({ ...current, ...patch }));
 
   return (
-    <Modal title={expense ? "Editar gasto variável" : "Novo gasto variável"} onClose={onClose}>
+    <Modal title={expense ? "Editar lançamento variável" : "Novo lançamento variável"} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-2">
         <TextInput label="Descrição" value={draft.name} onChange={(name) => update({ name })} />
         <label className="block">
@@ -8765,7 +8765,7 @@ function NorthIADrawer({
   const topVariable = variableLeaders[0];
   const topThreeVariables = variableLeaders.slice(0, 3);
   const outRatio = metrics.totalIncome ? metrics.totalOut / metrics.totalIncome : 0;
-  const financialSnapshot = `Entrou ${formatCurrency(metrics.totalIncome)}, saiu ${formatCurrency(metrics.totalOut)} (${formatCurrency(metrics.totalPaid)} em contas pagas e ${formatCurrency(metrics.totalVariableExpenses)} em gastos variáveis), faltam ${formatCurrency(metrics.totalMissing)} em contas abertas e o saldo previsto é ${formatCurrency(metrics.projectedBalance)}.`;
+  const financialSnapshot = `Entrou ${formatCurrency(metrics.totalIncome)}, saiu ${formatCurrency(metrics.totalOut)} (${formatCurrency(metrics.totalPaid)} em contas pagas e ${formatCurrency(metrics.totalVariableExpenses)} em variáveis), faltam ${formatCurrency(metrics.totalMissing)} em contas abertas e o saldo previsto é ${formatCurrency(metrics.projectedBalance)}.`;
   const extractAmount = (text: string) => {
     const match = text.match(/(?:r\$|\$)?\s*(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{1,2}))?/i);
     if (!match) return 0;
@@ -8800,26 +8800,26 @@ function NorthIADrawer({
     }
 
     if (normalized.includes("gasto") || normalized.includes("categoria") || normalized.includes("ifood") || normalized.includes("mercado")) {
-      if (!topVariable) return "Ainda não há gastos variáveis ativos neste mês para analisar. Quando tiver mercado, iFood, combustível ou compras, eu separo por categoria e mostro onde está pesando mais.";
-      return `Nos gastos variáveis, o maior ponto é ${topVariable.label}: ${formatCurrency(topVariable.total)} em ${topVariable.count} lançamento(s). Top categorias: ${topThreeVariables.map((item) => `${item.label} ${formatCurrency(item.total)}`).join("; ")}. Isso fica separado das contas fixas, então não duplica água, luz, IPTU ou condomínio.`;
+      if (!topVariable) return "Ainda não há variáveis ativos neste mês para analisar. Quando tiver mercado, iFood, combustível ou compras, eu separo por categoria e mostro onde está pesando mais.";
+      return `Nos variáveis, o maior ponto é ${topVariable.label}: ${formatCurrency(topVariable.total)} em ${topVariable.count} lançamento(s). Top categorias: ${topThreeVariables.map((item) => `${item.label} ${formatCurrency(item.total)}`).join("; ")}. Isso fica separado das contas fixas, então não duplica água, luz, IPTU ou condomínio.`;
     }
 
     if (normalized.includes("mes") || normalized.includes("diagnostico") || normalized.includes("relatorio")) {
-      return `${checkup.title}. ${checkup.summary} ${financialSnapshot} ${topVariable ? `Maior gasto variável: ${topVariable.label}, ${formatCurrency(topVariable.total)}.` : "Sem gasto variável ativo no mês."} ${metrics.paidLateBills.length ? `Você pagou ${metrics.paidLateBills.length} conta(s) com atraso médio de ${paidLateAverage} dia(s).` : "As contas pagas não registraram atraso."}`;
+      return `${checkup.title}. ${checkup.summary} ${financialSnapshot} ${topVariable ? `Maior lançamento variável: ${topVariable.label}, ${formatCurrency(topVariable.total)}.` : "Sem lançamento variável ativo no mês."} ${metrics.paidLateBills.length ? `Você pagou ${metrics.paidLateBills.length} conta(s) com atraso médio de ${paidLateAverage} dia(s).` : "As contas pagas não registraram atraso."}`;
     }
 
     if (normalized.includes("reserva") || normalized.includes("guardar") || normalized.includes("meta")) {
       if (metrics.overdueBills.length) {
         return `Antes de guardar mais, eu priorizaria as contas atrasadas: são ${formatCurrency(metrics.totalOverdue)} em aberto e ${totalLateDays} dia(s) de atraso acumulado. Depois disso, guardar uma parte fica muito mais saudável.`;
       }
-      return `Você pode guardar uma parte do valor livre: hoje há ${formatCurrency(freeToDecide)} para decidir. Eu começaria com uma reserva pequena e constante, sem comprometer contas pendentes nem esconder gastos variáveis.`;
+      return `Você pode guardar uma parte do valor livre: hoje há ${formatCurrency(freeToDecide)} para decidir. Eu começaria com uma reserva pequena e constante, sem comprometer contas pendentes nem esconder variáveis.`;
     }
 
     if (normalized.includes("score") || normalized.includes("saude") || normalized.includes("saúde")) {
-      return `O North Score considera seis sinais: entradas registradas, contas pagas, contas atrasadas, contas pendentes, reserva/metas e saldo previsto. Agora ele também enxerga saídas reais com gastos variáveis. Seu cenário: ${financialSnapshot}`;
+      return `O North Score considera seis sinais: entradas registradas, contas pagas, contas atrasadas, contas pendentes, reserva/metas e saldo previsto. Agora ele também enxerga saídas reais com variáveis. Seu cenário: ${financialSnapshot}`;
     }
 
-    return `Olhei seu mês por entradas, contas, atrasos, gastos variáveis, reserva, metas e saldo. ${financialSnapshot} ${topVariable ? `O maior gasto variável é ${topVariable.label}.` : ""} ${outRatio > 0.9 ? "Atenção: as saídas estão muito próximas das entradas." : ""} ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
+    return `Olhei seu mês por entradas, contas, atrasos, variáveis, reserva, metas e saldo. ${financialSnapshot} ${topVariable ? `O maior lançamento variável é ${topVariable.label}.` : ""} ${outRatio > 0.9 ? "Atenção: as saídas estão muito próximas das entradas." : ""} ${firstPriority ? `Minha próxima ação sugerida é resolver ${urgentText}.` : "Você está sem prioridade crítica; podemos planejar compra, reserva ou meta."}`;
   };
   const submitQuestion = (text = question) => {
     const clean = text.trim();
@@ -8834,10 +8834,10 @@ function NorthIADrawer({
     "Qual conta devo pagar primeiro?": firstPriority
       ? `${firstPriority.name} deve vir primeiro. ${firstPriority.status === "atrasada" ? `Ela está ${overdueLabel(firstPriority)} e venceu em ${formatDate(firstPriority.dueDate)}.` : `Ela vence em ${formatDate(firstPriority.dueDate)}.`} Depois, siga pelas outras atrasadas mais antigas e só então pelas próximas a vencer.`
       : "Você não tem contas pendentes agora. A próxima decisão pode ser reforçar reserva ou metas.",
-    "Como foi meu mês?": `${checkup.title}. ${checkup.summary} ${financialSnapshot} ${topVariable ? `Maior gasto variável: ${topVariable.label}, ${formatCurrency(topVariable.total)}.` : "Sem gasto variável ativo no mês."} Pontos de atenção: ${checkup.attentions.join(" ")}`,
+    "Como foi meu mês?": `${checkup.title}. ${checkup.summary} ${financialSnapshot} ${topVariable ? `Maior lançamento variável: ${topVariable.label}, ${formatCurrency(topVariable.total)}.` : "Sem lançamento variável ativo no mês."} Pontos de atenção: ${checkup.attentions.join(" ")}`,
     "Onde gastei mais?": topVariable
-      ? `Seu maior gasto variável foi ${topVariable.label}, com ${formatCurrency(topVariable.total)} em ${topVariable.count} lançamento(s). Top categorias: ${topThreeVariables.map((item) => `${item.label} ${formatCurrency(item.total)}`).join("; ")}.`
-      : "Ainda não há gastos variáveis ativos neste mês para comparar.",
+      ? `Seu maior lançamento variável foi ${topVariable.label}, com ${formatCurrency(topVariable.total)} em ${topVariable.count} lançamento(s). Top categorias: ${topThreeVariables.map((item) => `${item.label} ${formatCurrency(item.total)}`).join("; ")}.`
+      : "Ainda não há variáveis ativos neste mês para comparar.",
     "Como melhorar o próximo mês?": nextMonthAdvice,
   };
   const resetAnswer = () => {
@@ -9252,7 +9252,7 @@ function CategoriesSettings({
   const labels: Record<Category["type"], string> = {
     conta: "Categorias de contas",
     entrada: "Categorias de entradas",
-    variavel: "Categorias de gastos variáveis",
+    variavel: "Categorias de variáveis",
     meta: "Categorias de metas",
   };
 
@@ -10005,7 +10005,7 @@ function PlanningView({
   onSavePlanning: (planning: PlanningState) => void;
 }) {
   const initialPlanning = useMemo(
-    () => planning ?? buildDefaultPlanningState(metrics, rules),
+    () => planning ? sanitizePlanningState(planning) : buildDefaultPlanningState(metrics, rules),
     [metrics, planning, rules],
   );
   const [plannedIncome, setPlannedIncome] = useState(initialPlanning.plannedIncome);
@@ -10043,14 +10043,17 @@ function PlanningView({
     });
   }, [distribution, expectedExpenses, monthGoals, plannedIncome, style]);
   const totalDistribution = sum(distribution, (item) => item.value);
-  const totalGoals = sum(monthGoals.filter((goal) => goal.done), (goal) => goal.amount);
+  const totalGoals = sum(monthGoals, (goal) => goal.amount);
   const totalExpected = sum(expectedExpenses, (expense) => expense.amount);
   const distributionPercent = plannedIncome > 0 ? Math.round((totalDistribution / plannedIncome) * 100) : 0;
-  const fixedTotal = distribution.find((item) => item.id === "essenciais")?.value ?? 0;
+  const paidBillsTotal = distribution.find((item) => item.id === "contas-pagas")?.value ?? distribution.find((item) => item.id === "essenciais")?.value ?? 0;
+  const openBillsTotal = distribution.find((item) => item.id === "contas-abertas")?.value ?? distribution.find((item) => item.id === "atrasadas")?.value ?? 0;
+  const variableTotal = distribution.find((item) => item.id === "variaveis")?.value ?? 0;
   const reserveTotal = distribution.find((item) => item.id === "reserva")?.value ?? 0;
   const goalsBudgetTotal = distribution.find((item) => item.id === "metas")?.value ?? 0;
-  const otherDistribution = Math.max(0, totalDistribution - fixedTotal - reserveTotal - goalsBudgetTotal);
-  const remaining = plannedIncome - totalDistribution - totalExpected;
+  const remaining = plannedIncome - totalDistribution - totalExpected - totalGoals;
+  const realMonthOut = metrics.totalPaid + metrics.totalVariableExpenses;
+  const realMonthPressure = realMonthOut + metrics.totalPending + metrics.totalOverdue;
 
   const toneClasses: Record<string, string> = {
     orange: "bg-[#d75c27]/10 text-[#d75c27]",
@@ -10118,14 +10121,14 @@ function PlanningView({
   };
   const planningTips = remaining < 0
     ? [
-      `Você passou ${formatCurrency(Math.abs(remaining))} das entradas previstas.`,
-      "Comece revisando lazer e despesas previstas, que costumam ser mais flexíveis.",
-      "Mantenha contas atrasadas e essenciais protegidas antes de aumentar metas.",
+      `O plano passou ${formatCurrency(Math.abs(remaining))} das entradas previstas.`,
+      "Comece reduzindo variáveis, principalmente as categorias que mais aparecem no dashboard.",
+      "Mantenha contas abertas visíveis antes de aumentar metas ou reserva.",
     ]
     : [
       `Ainda sobraram ${formatCurrency(remaining)} para decidir.`,
-      "Uma boa próxima ação é reforçar reserva antes de aumentar compras flexíveis.",
-      "Se quiser acelerar metas, mova uma parte pequena do lazer para Futuro e Prioridades.",
+      "Uma boa próxima ação é escolher um valor pequeno e real para reserva.",
+      "Se quiser aliviar o mês, reduza primeiro iFood, mercado e compras soltas.",
     ];
   const DraftIcon = iconMap[categoryDraft.icon as keyof typeof iconMap] ?? Wallet;
   const planStyles: Array<{
@@ -10380,6 +10383,11 @@ function PlanningView({
                   </div>
                 </div>
               ))}
+              {monthGoals.length === 0 ? (
+                <p className="rounded-2xl border border-[var(--line)] bg-white/35 p-4 text-sm font-bold text-[var(--muted)] dark:bg-white/6">
+                  Nenhuma meta do mês cadastrada.
+                </p>
+              ) : null}
             </div>
             <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#d75c27]/7 p-3 text-sm font-bold">
               <span>Total destinado às metas</span>
@@ -10427,6 +10435,11 @@ function PlanningView({
                   </div>
                 </div>
               ))}
+              {expectedExpenses.length === 0 ? (
+                <p className="rounded-2xl border border-[var(--line)] bg-white/35 p-4 text-sm font-bold text-[var(--muted)] dark:bg-white/6">
+                  Nenhuma despesa prevista cadastrada.
+                </p>
+              ) : null}
             </div>
             <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#d75c27]/7 p-3 text-sm font-bold">
               <span>Total previsto</span>
@@ -10452,12 +10465,13 @@ function PlanningView({
           <p className="mt-2 text-xs font-semibold text-[var(--muted)]">Veja como seu dinheiro será utilizado neste mês.</p>
           <div className="mt-5 space-y-3">
             {[
-              ["Receita prevista", plannedIncome],
-              ["Total de despesas fixas (essenciais)", fixedTotal],
-              ["Outras categorias", otherDistribution],
+              ["Entradas previstas", plannedIncome],
+              ["Contas pagas", paidBillsTotal],
+              ["Contas abertas", openBillsTotal],
+              ["Variáveis", variableTotal],
               ["Despesas previstas", totalExpected],
-              ["Metas do orçamento", goalsBudgetTotal],
-              ["Reserva", reserveTotal],
+              ["Metas planejadas", totalGoals],
+              ["Reserva e metas guardadas", reserveTotal + goalsBudgetTotal],
             ].map(([label, value]) => (
               <div key={label as string} className="flex items-center justify-between gap-4 text-sm">
                 <span className="font-semibold text-[var(--muted)]">{label as string}</span>
@@ -10478,19 +10492,20 @@ function PlanningView({
           </h3>
           <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-white/76">
             {remaining >= 0
-              ? "Você está cobrindo suas necessidades, criando reservas e investindo nos seus objetivos."
-              : `Você passou ${formatCurrency(Math.abs(remaining))} das entradas previstas. Para manter esse plano, precisa aumentar a renda ou reduzir algum destino.`}
+              ? `O plano considera ${formatCurrency(realMonthOut)} já saindo entre contas pagas e variáveis, além de ${formatCurrency(metrics.totalPending + metrics.totalOverdue)} ainda aberto.`
+              : `O plano já enxerga ${formatCurrency(realMonthPressure)} entre o que saiu e o que ainda falta pagar. Para fechar, precisa reduzir destino ou aumentar entrada.`}
           </p>
           <div className="mt-6 grid gap-5 md:grid-cols-[1fr_220px] md:items-center">
             <div className="space-y-3">
               {[
-                "Todas as categorias foram planejadas",
-                reserveTotal > 0 ? "Você destinou para reserva" : "Reserva ainda precisa de valor",
-                totalGoals > plannedIncome * 0.08 ? "Suas metas estão sendo financiadas" : "Apenas uma parte pequena foi para metas",
+                variableTotal > 0 ? "Variáveis entraram no plano" : "Variáveis ainda estão zeradas",
+                openBillsTotal > 0 ? "Contas abertas estão visíveis" : "Sem contas abertas no plano",
+                reserveTotal > 0 ? "Reserva entrou no plano" : "Reserva está zerada até você definir",
+                totalGoals > 0 ? "Metas do mês foram planejadas" : "Metas do mês estão zeradas",
                 remaining >= 0 ? "Seu saldo livre está positivo" : "Seu plano está acima da receita",
               ].map((item, index) => (
                 <div key={item} className="flex items-start gap-3">
-                  <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${index === 3 && remaining < 0 ? "bg-red-500/18 text-red-300" : "bg-emerald-500/18 text-emerald-300"}`}>
+                  <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${index === 4 && remaining < 0 ? "bg-red-500/18 text-red-300" : "bg-emerald-500/18 text-emerald-300"}`}>
                     <Check className="h-3.5 w-3.5" />
                   </span>
                   <p className="text-sm font-semibold leading-5 text-white/78">{item}</p>
@@ -10751,7 +10766,7 @@ function ActiveView({
       />
     );
   }
-  if (active === "Gastos variáveis") {
+  if (active === "Variáveis" || active === "Variáveis") {
     return (
       <VariableExpensesView
         expenses={data.variableExpenses}
@@ -10877,10 +10892,10 @@ const viewCopy: Record<string, { eyebrow: string; title: string; description: st
     title: "Contas do mês",
     description: "Filtre, acompanhe e marque pagamentos.",
   },
-  "Gastos variáveis": {
+  Variáveis: {
     eyebrow: "Extrato variável",
-    title: "Gastos variáveis",
-    description: "Mercado, combustível, padaria e compras que não são contas fixas.",
+    title: "Variáveis",
+    description: "Mercado, iFood, combustível e compras que não são contas fixas.",
   },
   Saídas: {
     eyebrow: "Compromissos PJ",
@@ -10930,7 +10945,7 @@ const viewCopy: Record<string, { eyebrow: string; title: string; description: st
   Configurações: {
     eyebrow: "Personalização",
     title: "Configurações",
-    description: "Crie categorias com ícone e cor para contas, entradas, gastos variáveis e metas.",
+    description: "Crie categorias com ícone e cor para contas, entradas, variáveis e metas.",
   },
 };
 
@@ -11908,7 +11923,7 @@ export default function ReveeNorthApp() {
   const handleImportHistoricalBusinessSales = () => {
     confirmDanger(
       "Importar histórico enviado?",
-      `Isso vai deixar a base financeira somente com as ${historicalBusinessSalesImport.length} vendas da lista enviada. Entradas pessoais, contas, gastos variáveis, metas, reserva, investimentos, pró-labore e exemplos antigos serão zerados.`,
+      `Isso vai deixar a base financeira somente com as ${historicalBusinessSalesImport.length} vendas da lista enviada. Entradas pessoais, contas, variáveis, metas, reserva, investimentos, pró-labore e exemplos antigos serão zerados.`,
       () => {
         const importedBusiness = {
           ...defaultBusinessState(),
@@ -12215,8 +12230,8 @@ export default function ReveeNorthApp() {
                             setActive("Contas");
                             setBillCreateModalOpen(true);
                           }],
-                          [ShoppingCart, "Novo gasto variável", () => {
-                            setActive("Gastos variáveis");
+                          [ShoppingCart, "Novo lançamento variável", () => {
+                            setActive("Variáveis");
                             setVariableExpenseModalOpen(true);
                           }],
                           [BadgeDollarSign, "Nova dívida", () => {
