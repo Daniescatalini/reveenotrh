@@ -36,6 +36,7 @@ import {
   Fuel,
   Gamepad2,
   GraduationCap,
+  HandCoins,
   Heart,
   HeartPulse,
   HelpCircle,
@@ -52,6 +53,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Palette,
+  ParkingCircle,
   Pencil,
   PiggyBank,
   Plane,
@@ -169,6 +171,7 @@ const iconMap = {
   Lock,
   Bell,
   Landmark,
+  ParkingCircle,
   Gift,
   Folder,
   BarChart3,
@@ -189,6 +192,7 @@ const iconMap = {
   SoccerBall: SoccerBallIcon,
   BadgeDollarSign,
   Coins,
+  HandCoins,
   TvMinimal,
   CircleAlert,
   Scissors,
@@ -220,6 +224,8 @@ const visualIconChoices = [
   { id: "Target", Icon: Target, label: "Meta" },
   { id: "Sparkles", Icon: Sparkles, label: "Outro" },
   { id: "Landmark", Icon: Landmark, label: "Banco" },
+  { id: "ParkingCircle", Icon: ParkingCircle, label: "Estacionamento" },
+  { id: "HandCoins", Icon: HandCoins, label: "Mesada" },
   { id: "Gift", Icon: Gift, label: "Bônus" },
   { id: "Folder", Icon: Folder, label: "Arquivo" },
   { id: "Coins", Icon: Coins, label: "Moedas" },
@@ -11146,7 +11152,7 @@ export default function ReveeNorthApp() {
       if (savedState) applyCloudState(JSON.parse(savedState) as ReveeNorthCloudState);
       if (savedUser) setUser(JSON.parse(savedUser) as UserProfile);
       if (savedBalance) setRealBalance(JSON.parse(savedBalance) as RealBalance);
-      if (savedCategories) setCategories(JSON.parse(savedCategories) as Category[]);
+      if (!savedState && savedCategories) setCategories(JSON.parse(savedCategories) as Category[]);
       if (savedOnboarding === "true") setOnboardingComplete(true);
       if (savedLoggedIn === "true") setLoggedIn(true);
     } catch {
