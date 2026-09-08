@@ -1268,15 +1268,32 @@ function normalizeKnownVariableExpense(expense: VariableExpense): VariableExpens
   return expense;
 }
 
+function shouldKeepVariableExpense(expense: VariableExpense) {
+  const text = normalizeCategoryName(`${expense.name} ${expense.notes ?? ""}`);
+  return !(
+    text.includes("daniela monteiro") ||
+    text.includes("daniela montei") ||
+    text.includes("gustavo mota") ||
+    text.includes("gustavo motta")
+  );
+}
+
+function cleanKnownVariableExpenses(expenses: VariableExpense[]) {
+  return expenses.filter(shouldKeepVariableExpense).map(normalizeKnownVariableExpense);
+}
+
 function applySameNameVariableCategory(current: VariableExpense[], expense: VariableExpense) {
   const targetName = normalizeCategoryName(expense.name);
   const previous = current.find((item) => item.id === expense.id);
   const categoryChanged = previous && normalizeCategoryName(previous.category) !== normalizeCategoryName(expense.category);
-  return current.map((item) => {
-    if (item.id === expense.id) return normalizeKnownVariableExpense(expense);
-    if (!categoryChanged || normalizeCategoryName(item.name) !== targetName) return normalizeKnownVariableExpense(item);
-    return normalizeKnownVariableExpense({ ...item, category: expense.category });
-  });
+  let updatedCount = 0;
+  const expenses = cleanKnownVariableExpenses(current.map((item) => {
+    if (item.id === expense.id) return expense;
+    if (!categoryChanged || normalizeCategoryName(item.name) !== targetName) return item;
+    updatedCount += 1;
+    return { ...item, category: expense.category };
+  }));
+  return { expenses, updatedCount };
 }
 
 function buildMetrics(data: MonthData) {
@@ -11292,7 +11309,7 @@ export default function ReveeNorthApp() {
     if (safeState.bills) {
       setBills((current) => preserveBillLogos(cleanupStuckFootballBillsOnce(safeState.bills!), current));
     }
-    if (safeState.variableExpenses) setVariableExpenses(safeState.variableExpenses.map(normalizeKnownVariableExpense));
+    if (safeState.variableExpenses) setVariableExpenses(cleanKnownVariableExpenses(safeState.variableExpenses));
     if (safeState.debts) setDebts(safeState.debts);
     if (safeState.incomes) setIncomes(safeState.incomes);
     if (safeState.goals) setGoals(safeState.goals);
@@ -12041,15 +12058,23 @@ export default function ReveeNorthApp() {
   };
 
   const handleSaveVariableExpense = (expense: VariableExpense) => {
+    let updatedCount = 0;
     setVariableExpenses((current) => {
       const exists = current.some((item) => item.id === expense.id);
-      const nextExpenses = exists
+      const result = exists
         ? applySameNameVariableCategory(current, expense)
-        : [normalizeKnownVariableExpense(expense), ...current.map(normalizeKnownVariableExpense)];
+        : { expenses: cleanKnownVariableExpenses([expense, ...current]), updatedCount: 0 };
+      updatedCount = result.updatedCount;
+      const nextExpenses = result.expenses;
       persistCloudPatchNow({ variableExpenses: nextExpenses });
       return nextExpenses;
     });
-    showFeedback("Gasto salvo.", "O Dashboard já considera essa saída variável.");
+    showFeedback(
+      updatedCount > 0 ? "Categoria aplicada." : "Gasto salvo.",
+      updatedCount > 0
+        ? `Mais ${updatedCount} lançamento${updatedCount === 1 ? "" : "s"} com o mesmo nome foram atualizados.`
+        : "O Dashboard já considera essa saída variável.",
+    );
   };
 
   const handleDeleteVariableExpense = (id: number) => {
@@ -12291,7 +12316,7 @@ export default function ReveeNorthApp() {
     setActive("Dashboard");
   };
 
-  if (!authReady || (loggedIn && !cloudReady)) {
+  if (!authReady) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#efefef] text-[#211d19]">
         <div className="text-center">
