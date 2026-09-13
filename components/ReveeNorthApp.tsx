@@ -5576,6 +5576,93 @@ function ReportsView({
   const distributionItems = [...billCategoryTotals, ...variableCategoryTotals];
   const visibleDistributionItems = showAllDistribution ? distributionItems : distributionItems.slice(0, 5);
   const distributionRealTotal = sum(distributionItems, (item) => item.value);
+  const monthlyEntries = [...data.incomes]
+    .sort((a, b) => (a.receivedDate.localeCompare(b.receivedDate) || a.name.localeCompare(b.name)));
+  const monthlyBills = [...data.bills]
+    .map((bill) => normalizeBillStatus(bill))
+    .sort((a, b) => ((a.paidDate ?? a.dueDate).localeCompare(b.paidDate ?? b.dueDate) || a.name.localeCompare(b.name)));
+  const monthlyVariables = [...variableExpensesInSelectedMonth]
+    .sort((a, b) => (a.date.localeCompare(b.date) || a.name.localeCompare(b.name)));
+  const monthlyReportRows: (string | number | boolean | undefined)[][] = [
+    ["Tipo", "Data", "Descrição", "Categoria", "Status", "Valor", "Observação"],
+    ...monthlyEntries.map((income) => [
+      "Entrada",
+      formatDate(income.receivedDate),
+      income.name,
+      income.category,
+      "Recebida",
+      income.amount,
+      income.note,
+    ]),
+    ...monthlyBills.map((bill) => [
+      "Conta",
+      formatDate(bill.paidDate ?? bill.dueDate),
+      bill.name,
+      bill.category,
+      statusLabels[bill.status],
+      bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount,
+      bill.status === "paga" ? "Conta paga" : bill.status === "atrasada" ? overdueLabel(bill) : "Conta pendente",
+    ]),
+    ...monthlyVariables.map((expense) => [
+      "Variável",
+      formatDate(expense.date),
+      expense.name,
+      expense.category,
+      expense.ignored ? "Ignorada" : "Considerada",
+      expense.amount,
+      expense.notes,
+    ]),
+  ];
+  const monthlyReportCards = [
+    { label: "Entradas", value: metrics.totalIncome, helper: `${monthlyEntries.length} recebimento(s)`, icon: ArrowDownLeft, color: "#0f9f6e" },
+    { label: "Contas", value: metrics.totalPaid + metrics.totalPending + metrics.totalOverdue, helper: `${monthlyBills.length} conta(s)`, icon: ReceiptText, color: "#d75c27" },
+    { label: "Variáveis", value: metrics.totalVariableExpenses, helper: `${monthlyVariables.length} lançamento(s)`, icon: ShoppingCart, color: "#f59e0b" },
+    { label: "Saldo", value: metrics.projectedBalance, helper: "Entrou menos saiu", icon: Wallet, color: metrics.projectedBalance >= 0 ? "#0f9f6e" : "#ef4444" },
+  ];
+  const monthlyReportSections = [
+    {
+      title: "Entradas",
+      total: metrics.totalIncome,
+      empty: "Nenhuma entrada registrada neste mês.",
+      items: monthlyEntries.map((income) => ({
+        date: income.receivedDate,
+        label: income.name,
+        helper: income.category,
+        amount: income.amount,
+        tone: "in" as const,
+      })),
+      detailTitle: "Entradas do mês",
+      detailDescription: "Todos os recebimentos registrados no mês selecionado.",
+    },
+    {
+      title: "Contas",
+      total: metrics.totalPaid + metrics.totalPending + metrics.totalOverdue,
+      empty: "Nenhuma conta registrada neste mês.",
+      items: monthlyBills.map((bill) => ({
+        date: bill.paidDate ?? bill.dueDate,
+        label: bill.name,
+        helper: `${bill.category} • ${statusLabels[bill.status]}`,
+        amount: bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount,
+        tone: bill.status === "paga" ? "out" as const : "neutral" as const,
+      })),
+      detailTitle: "Contas do mês",
+      detailDescription: "Contas pagas, pendentes e atrasadas no mês selecionado.",
+    },
+    {
+      title: "Variáveis",
+      total: metrics.totalVariableExpenses,
+      empty: "Nenhum gasto variável registrado neste mês.",
+      items: monthlyVariables.map((expense) => ({
+        date: expense.date,
+        label: expense.name,
+        helper: expense.category,
+        amount: expense.amount,
+        tone: "out" as const,
+      })),
+      detailTitle: "Variáveis do mês",
+      detailDescription: "Compras soltas e gastos que não são contas fixas.",
+    },
+  ];
   const trendMonths = buildMonthRange(addMonths(data.selectedMonth, -5), data.selectedMonth);
   const trendRows = trendMonths.map((month) => {
     const monthData = buildMonthDataFromLists(month, allIncomes, allBills, allGoals, [], allVariableExpenses);
@@ -5733,6 +5820,103 @@ function ReportsView({
           </button>
         </div>
       </section>
+
+      <Card className="p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#d75c27]">Relatório mensal</p>
+            <h3 className="mt-1 text-2xl font-black">Resumo completo de {reportMonth}</h3>
+            <p className="mt-1 text-sm font-semibold text-[var(--muted)]">
+              Entradas, contas, variáveis e categorias do mês selecionado.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => downloadCsv(`relatorio-mensal-${data.selectedMonth}.csv`, monthlyReportRows)}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d75c27]/25 px-4 py-3 text-sm font-extrabold text-[#d75c27] transition hover:bg-[#d75c27]/8"
+          >
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {monthlyReportCards.map(({ label, value, helper, icon: Icon, color }) => (
+            <button
+              type="button"
+              key={label}
+              onClick={() => onOpenFinanceDetail(buildFinanceDetail(label === "Saldo" ? "Saldo atual" : label, data, metrics, realBalance))}
+              className="rounded-3xl border border-[var(--line)] bg-white/40 p-4 text-left transition hover:-translate-y-0.5 hover:bg-white/70 dark:bg-white/5 dark:hover:bg-white/10"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: `${color}18`, color }}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <p className="mt-4 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--muted)]">{label}</p>
+              <p className="mt-1 text-2xl font-black">{formatCurrency(value)}</p>
+              <p className="mt-1 text-xs font-bold text-[var(--muted)]">{helper}</p>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          {monthlyReportSections.map((section) => (
+            <div key={section.title} className="rounded-3xl border border-[var(--line)] bg-white/35 p-4 dark:bg-white/5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-extrabold">{section.title}</p>
+                  <p className="text-[11px] font-semibold text-[var(--muted)]">{section.items.length} lançamento(s)</p>
+                </div>
+                <p className="text-sm font-black text-[#d75c27]">{formatCurrency(section.total)}</p>
+              </div>
+              <div className="space-y-2">
+                {section.items.length ? section.items.slice(0, 5).map((item) => (
+                  <div key={`${section.title}-${item.date}-${item.label}-${item.amount}`} className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-white/45 px-3 py-2 dark:bg-white/5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-extrabold">{item.label}</span>
+                      <span className="mt-0.5 block text-[10px] font-semibold text-[var(--muted)]">{item.date ? formatDate(item.date) : ""} • {item.helper}</span>
+                    </span>
+                    <span className={`text-right text-xs font-black ${item.tone === "in" ? "text-emerald-600" : item.tone === "out" ? "text-[#d75c27]" : "text-[var(--muted)]"}`}>
+                      {item.tone === "in" ? "+" : item.tone === "out" ? "-" : ""}{formatCurrency(item.amount)}
+                    </span>
+                  </div>
+                )) : (
+                  <p className="rounded-2xl border border-[var(--line)] bg-white/45 p-3 text-xs font-semibold text-[var(--muted)] dark:bg-white/5">
+                    {section.empty}
+                  </p>
+                )}
+              </div>
+              {section.items.length > 5 ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenFinanceDetail({
+                    title: section.detailTitle,
+                    value: section.total,
+                    description: section.detailDescription,
+                    sections: [{ title: section.title, total: section.total, items: section.items }],
+                  })}
+                  className="mt-3 flex w-full items-center justify-between rounded-2xl border border-[var(--line)] px-3 py-2 text-xs font-extrabold transition hover:bg-white/55 dark:hover:bg-white/8"
+                >
+                  Ver todos
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {[
+            { label: "Categorias de entradas", value: data.incomes.reduce((acc, income) => acc.add(income.category), new Set<string>()).size },
+            { label: "Categorias de contas", value: billCategoryTotals.length },
+            { label: "Categorias de variáveis", value: variableCategoryTotals.length },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center justify-between rounded-2xl bg-[#211d19]/4 px-4 py-3 dark:bg-white/6">
+              <span className="text-xs font-bold text-[var(--muted)]">{item.label}</span>
+              <span className="text-sm font-black">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_1fr_1fr]">
         <Card className="p-5">
