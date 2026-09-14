@@ -5581,7 +5581,6 @@ function ReportsView({
   const monthlyBills = [...data.bills]
     .map((bill) => normalizeBillStatus(bill))
     .sort((a, b) => ((a.paidDate ?? a.dueDate).localeCompare(b.paidDate ?? b.dueDate) || a.name.localeCompare(b.name)));
-  const monthlyPaidBills = monthlyBills.filter((bill) => bill.status === "paga");
   const monthlyVariables = [...variableExpensesInSelectedMonth]
     .sort((a, b) => (a.date.localeCompare(b.date) || a.name.localeCompare(b.name)));
   const monthlyReportRows: (string | number | boolean | undefined)[][] = [
@@ -5598,16 +5597,20 @@ function ReportsView({
     ]),
     ["Total de entradas", "", "", metrics.totalIncome, ""],
     [],
-    ["CONTAS PAGAS"],
-    ["Data de pagamento", "Conta", "Categoria", "Valor pago", "Observação"],
-    ...monthlyPaidBills.map((bill) => [
-      formatDate(bill.paidDate ?? bill.dueDate),
+    ["CONTAS DO MÊS"],
+    ["Vencimento", "Data de pagamento", "Conta", "Categoria", "Status", "Valor previsto", "Valor pago", "Observação"],
+    ...monthlyBills.map((bill) => [
+      formatDate(bill.dueDate),
+      bill.paidDate ? formatDate(bill.paidDate) : "",
       bill.name,
       bill.category,
-      bill.paidAmount ?? bill.expectedAmount,
-      "Conta paga",
+      statusLabels[bill.status],
+      bill.expectedAmount,
+      bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : "",
+      bill.status === "paga" ? "Conta paga" : bill.status === "atrasada" ? overdueLabel(bill) : "Conta em aberto",
     ]),
-    ["Total de contas pagas", "", "", metrics.totalPaid, ""],
+    ["Total de contas pagas", "", "", "", "", "", metrics.totalPaid, ""],
+    ["Total em aberto/atrasado", "", "", "", "", metrics.totalPending + metrics.totalOverdue, "", ""],
     [],
     ["VARIÁVEIS"],
     ["Data", "Descrição", "Categoria", "Valor", "Observação"],
@@ -5623,6 +5626,7 @@ function ReportsView({
     ["RESUMO"],
     ["Entradas", metrics.totalIncome],
     ["Contas pagas", metrics.totalPaid],
+    ["Contas em aberto/atrasadas", metrics.totalPending + metrics.totalOverdue],
     ["Variáveis", metrics.totalVariableExpenses],
     ["Saldo do mês", metrics.projectedBalance],
   ];
