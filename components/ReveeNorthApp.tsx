@@ -3461,7 +3461,9 @@ function IncomesView({
           </p>
         </div>
         <div className="mt-4 divide-y divide-[#211d19]/8">
-          {incomes.map((income) => (
+          {[...incomes]
+            .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id)
+            .map((income) => (
             <button
               type="button"
               key={`statement-${income.id}`}
@@ -3492,7 +3494,9 @@ function IncomesView({
               {
                 title: "Histórico de movimentações",
                 total: selectedTotal,
-                items: selectedItems.map((income) => ({
+                items: [...selectedItems]
+                  .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id)
+                  .map((income) => ({
                   date: income.receivedDate,
                   label: income.name,
                   helper: income.note || income.category,
@@ -3554,7 +3558,7 @@ function VariableExpensesView({
   const exportRows = [
     ["Identificação", "Categoria", "Valor", "Data paga", "Observações", "Ignorado dos totais"],
     ...[...visibleExpenses]
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
       .map((expense) => [
         expense.name,
         expense.category,
@@ -4841,7 +4845,7 @@ function BusinessSalesView({
         dateLabel: installment.received ? "Recebido em" : "Previsto",
         displayDate: installment.receivedDate ?? installment.dueDate,
       })),
-  ].sort((a, b) => a.sortDate.localeCompare(b.sortDate) || a.sale.clientName.localeCompare(b.sale.clientName));
+  ].sort((a, b) => b.sortDate.localeCompare(a.sortDate) || a.sale.clientName.localeCompare(b.sale.clientName));
   const rows = [
     { label: "Faturamento bruto", value: metrics.closed, helper: "Vendas fechadas no mês" },
     { label: "Recebido", value: metrics.received, helper: "Entrou de fato na conta" },
@@ -4946,7 +4950,9 @@ function BusinessPayrollView({ business, selectedMonth, onOpenPayroll }: { busin
       <Card className="p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Registros</p>
         <div className="mt-4 divide-y divide-[#211d19]/8 dark:divide-white/10">
-          {metrics.payroll.map((item) => (
+          {[...metrics.payroll]
+            .sort((a, b) => b.paidDate.localeCompare(a.paidDate) || b.id - a.id)
+            .map((item) => (
             <button key={item.id} type="button" onClick={() => onOpenPayroll(item)} className="grid w-full gap-3 py-3 text-left sm:grid-cols-[1fr_120px_130px] sm:items-center">
               <div>
                 <p className="text-sm font-extrabold">{item.personName}</p>
@@ -4976,7 +4982,9 @@ function BusinessInvestmentsView({ business, selectedMonth, onOpenInvestment }: 
       <Card className="p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Registros</p>
         <div className="mt-4 divide-y divide-[#211d19]/8 dark:divide-white/10">
-          {metrics.investments.map((item) => (
+          {[...metrics.investments]
+            .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+            .map((item) => (
             <button key={item.id} type="button" onClick={() => onOpenInvestment(item)} className="grid w-full gap-3 py-3 text-left sm:grid-cols-[1fr_120px_130px] sm:items-center">
               <div>
                 <p className="text-sm font-extrabold">{item.name}</p>
@@ -5577,12 +5585,12 @@ function ReportsView({
   const visibleDistributionItems = showAllDistribution ? distributionItems : distributionItems.slice(0, 5);
   const distributionRealTotal = sum(distributionItems, (item) => item.value);
   const monthlyEntries = [...data.incomes]
-    .sort((a, b) => (a.receivedDate.localeCompare(b.receivedDate) || a.name.localeCompare(b.name)));
+    .sort((a, b) => (b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id));
   const monthlyBills = [...data.bills]
     .map((bill) => normalizeBillStatus(bill))
-    .sort((a, b) => ((a.paidDate ?? a.dueDate).localeCompare(b.paidDate ?? b.dueDate) || a.name.localeCompare(b.name)));
+    .sort((a, b) => ((b.paidDate ?? b.dueDate).localeCompare(a.paidDate ?? a.dueDate) || b.id - a.id));
   const monthlyVariables = [...variableExpensesInSelectedMonth]
-    .sort((a, b) => (a.date.localeCompare(b.date) || a.name.localeCompare(b.name)));
+    .sort((a, b) => (b.date.localeCompare(a.date) || b.id - a.id));
   const monthlyReportRows: (string | number | boolean | undefined)[][] = [
     [`RELATÓRIO MENSAL - ${reportMonth}`],
     [],
@@ -7636,20 +7644,19 @@ function IncomeModal({
 
 function BillModalCreate({
   categories,
-  selectedMonth,
   onClose,
   onCreate,
 }: {
   categories: Category[];
-  selectedMonth: string;
   onClose: () => void;
   onCreate: (bill: Bill) => void;
 }) {
+  const today = getTodayKey();
   const [draft, setDraft] = useState<Bill>({
     id: Date.now(),
     name: "Nova despesa",
     category: sortedCategories(categories, "conta", true)[0]?.name ?? "Moradia",
-    dueDate: `${selectedMonth}-10`,
+    dueDate: today,
     expectedAmount: 0,
     status: "pendente",
     notes: "",
@@ -7771,23 +7778,22 @@ function BillModalCreate({
 function VariableExpenseModal({
   expense,
   categories,
-  selectedMonth,
   onClose,
   onSave,
   onDelete,
 }: {
   expense?: VariableExpense;
   categories: Category[];
-  selectedMonth: string;
   onClose: () => void;
   onSave: (expense: VariableExpense) => void;
   onDelete?: (id: number) => void;
 }) {
+  const today = getTodayKey();
   const [draft, setDraft] = useState<VariableExpense>(expense ?? {
     id: Date.now(),
     name: "Gasto variável",
     category: sortedCategories(categories, "variavel", true)[0]?.name ?? "Compras",
-    date: getReferenceDate(selectedMonth),
+    date: today,
     amount: 0,
     notes: "",
     ignored: false,
@@ -8178,24 +8184,23 @@ function BusinessSaleModal({
 
 function BusinessPayrollModal({
   payroll,
-  selectedMonth,
   onClose,
   onSave,
   onDelete,
 }: {
   payroll?: BusinessPayroll;
-  selectedMonth: string;
   onClose: () => void;
   onSave: (payroll: BusinessPayroll) => void;
   onDelete?: (id: number) => void;
 }) {
+  const today = getTodayKey();
   const [draft, setDraft] = useState<BusinessPayroll>(
     payroll ?? {
       id: Date.now(),
       personName: "",
       type: "Pró-labore",
       amount: 0,
-      paidDate: `${selectedMonth}-01`,
+      paidDate: today,
       notes: "",
     },
   );
@@ -8244,24 +8249,23 @@ function BusinessPayrollModal({
 
 function BusinessInvestmentModal({
   investment,
-  selectedMonth,
   onClose,
   onSave,
   onDelete,
 }: {
   investment?: BusinessInvestment;
-  selectedMonth: string;
   onClose: () => void;
   onSave: (investment: BusinessInvestment) => void;
   onDelete?: (id: number) => void;
 }) {
+  const today = getTodayKey();
   const [draft, setDraft] = useState<BusinessInvestment>(
     investment ?? {
       id: Date.now(),
       name: "Reserva da empresa",
       type: "Reserva",
       amount: 0,
-      date: `${selectedMonth}-01`,
+      date: today,
       notes: "",
     },
   );
@@ -12653,37 +12657,48 @@ export default function ReveeNorthApp() {
                             setBusinessSaleModalOpen(true);
                           }],
                           [ReceiptText, "Nova saída", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Saídas");
                             setBillCreateModalOpen(true);
                           }],
                           [Users, "Novo pró-labore", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Pró-labore");
                             setBusinessPayrollModalOpen(true);
                           }],
                           [PiggyBank, "Guardar dinheiro", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Investimentos");
                             setBusinessInvestmentModalOpen(true);
                           }],
                         ]
                       : [
-                          [ArrowDownLeft, "Nova entrada", () => setIncomeModalOpen(true)],
+                          [ArrowDownLeft, "Nova entrada", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
+                            setIncomeModalOpen(true);
+                          }],
                           [ReceiptText, "Nova despesa", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Contas");
                             setBillCreateModalOpen(true);
                           }],
                           [ShoppingCart, "Novo lançamento variável", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Variáveis");
                             setVariableExpenseModalOpen(true);
                           }],
                           [BadgeDollarSign, "Nova dívida", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Dívidas");
                             setDebtModalOpen(true);
                           }],
                           [Target, "Nova meta", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Metas");
                             setGoalCreateModalOpen(true);
                           }],
                           [Flag, "Novo objetivo", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Objetivos do mês");
                             setObjectiveModalOpen(true);
                           }],
@@ -12881,7 +12896,6 @@ export default function ReveeNorthApp() {
       {variableExpenseModalOpen ? (
         <VariableExpenseModal
           categories={categories}
-          selectedMonth={selectedMonth}
           onClose={() => setVariableExpenseModalOpen(false)}
           onSave={handleSaveVariableExpense}
         />
@@ -12890,7 +12904,6 @@ export default function ReveeNorthApp() {
         <VariableExpenseModal
           expense={selectedVariableExpense}
           categories={categories}
-          selectedMonth={selectedMonth}
           onClose={() => setSelectedVariableExpense(null)}
           onSave={handleSaveVariableExpense}
           onDelete={handleDeleteVariableExpense}
@@ -12899,7 +12912,6 @@ export default function ReveeNorthApp() {
       {billCreateModalOpen ? (
         <BillModalCreate
           categories={workspaceMode === "business" ? business.categories : categories}
-          selectedMonth={selectedMonth}
           onClose={() => setBillCreateModalOpen(false)}
           onCreate={handleCreateBill}
         />
@@ -12920,7 +12932,6 @@ export default function ReveeNorthApp() {
       ) : null}
       {businessPayrollModalOpen ? (
         <BusinessPayrollModal
-          selectedMonth={selectedMonth}
           onClose={() => setBusinessPayrollModalOpen(false)}
           onSave={handleSaveBusinessPayroll}
         />
@@ -12928,7 +12939,6 @@ export default function ReveeNorthApp() {
       {selectedBusinessPayroll ? (
         <BusinessPayrollModal
           payroll={selectedBusinessPayroll}
-          selectedMonth={selectedMonth}
           onClose={() => setSelectedBusinessPayroll(null)}
           onSave={handleSaveBusinessPayroll}
           onDelete={handleDeleteBusinessPayroll}
@@ -12936,7 +12946,6 @@ export default function ReveeNorthApp() {
       ) : null}
       {businessInvestmentModalOpen ? (
         <BusinessInvestmentModal
-          selectedMonth={selectedMonth}
           onClose={() => setBusinessInvestmentModalOpen(false)}
           onSave={handleSaveBusinessInvestment}
         />
@@ -12944,7 +12953,6 @@ export default function ReveeNorthApp() {
       {selectedBusinessInvestment ? (
         <BusinessInvestmentModal
           investment={selectedBusinessInvestment}
-          selectedMonth={selectedMonth}
           onClose={() => setSelectedBusinessInvestment(null)}
           onSave={handleSaveBusinessInvestment}
           onDelete={handleDeleteBusinessInvestment}
