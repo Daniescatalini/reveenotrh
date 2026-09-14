@@ -5581,37 +5581,50 @@ function ReportsView({
   const monthlyBills = [...data.bills]
     .map((bill) => normalizeBillStatus(bill))
     .sort((a, b) => ((a.paidDate ?? a.dueDate).localeCompare(b.paidDate ?? b.dueDate) || a.name.localeCompare(b.name)));
+  const monthlyPaidBills = monthlyBills.filter((bill) => bill.status === "paga");
   const monthlyVariables = [...variableExpensesInSelectedMonth]
     .sort((a, b) => (a.date.localeCompare(b.date) || a.name.localeCompare(b.name)));
   const monthlyReportRows: (string | number | boolean | undefined)[][] = [
-    ["Tipo", "Data", "Descrição", "Categoria", "Status", "Valor", "Observação"],
+    [`RELATÓRIO MENSAL - ${reportMonth}`],
+    [],
+    ["ENTRADAS"],
+    ["Data", "Origem", "Categoria", "Valor", "Observação"],
     ...monthlyEntries.map((income) => [
-      "Entrada",
       formatDate(income.receivedDate),
       income.name,
       income.category,
-      "Recebida",
       income.amount,
       income.note,
     ]),
-    ...monthlyBills.map((bill) => [
-      "Conta",
+    ["Total de entradas", "", "", metrics.totalIncome, ""],
+    [],
+    ["CONTAS PAGAS"],
+    ["Data de pagamento", "Conta", "Categoria", "Valor pago", "Observação"],
+    ...monthlyPaidBills.map((bill) => [
       formatDate(bill.paidDate ?? bill.dueDate),
       bill.name,
       bill.category,
-      statusLabels[bill.status],
-      bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount,
-      bill.status === "paga" ? "Conta paga" : bill.status === "atrasada" ? overdueLabel(bill) : "Conta pendente",
+      bill.paidAmount ?? bill.expectedAmount,
+      "Conta paga",
     ]),
+    ["Total de contas pagas", "", "", metrics.totalPaid, ""],
+    [],
+    ["VARIÁVEIS"],
+    ["Data", "Descrição", "Categoria", "Valor", "Observação"],
     ...monthlyVariables.map((expense) => [
-      "Variável",
       formatDate(expense.date),
       expense.name,
       expense.category,
-      expense.ignored ? "Ignorada" : "Considerada",
       expense.amount,
-      expense.notes,
+      expense.ignored ? `Ignorada - ${expense.notes ?? ""}`.trim() : expense.notes,
     ]),
+    ["Total de variáveis", "", "", metrics.totalVariableExpenses, ""],
+    [],
+    ["RESUMO"],
+    ["Entradas", metrics.totalIncome],
+    ["Contas pagas", metrics.totalPaid],
+    ["Variáveis", metrics.totalVariableExpenses],
+    ["Saldo do mês", metrics.projectedBalance],
   ];
   const monthlyReportCards = [
     { label: "Entradas", value: metrics.totalIncome, helper: `${monthlyEntries.length} recebimento(s)`, icon: ArrowDownLeft, color: "#0f9f6e" },
