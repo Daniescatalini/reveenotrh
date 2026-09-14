@@ -7955,17 +7955,16 @@ function PaymentModal({
 
 function BusinessSaleModal({
   sale,
-  selectedMonth,
   onClose,
   onSave,
   onDelete,
 }: {
   sale?: BusinessSale;
-  selectedMonth: string;
   onClose: () => void;
   onSave: (sale: BusinessSale) => void;
   onDelete?: (id: number) => void;
 }) {
+  const today = getTodayKey();
   const buildInstallments = (count: number, total: number, startDate: string) => {
     const startMonth = monthKey(startDate);
     const dueDay = startDate.slice(8, 10) || "10";
@@ -7983,8 +7982,8 @@ function BusinessSaleModal({
       service: "",
       closedAmount: 0,
       receivedAmount: 0,
-      receivedDate: `${selectedMonth}-01`,
-      closedDate: `${selectedMonth}-01`,
+      receivedDate: today,
+      closedDate: today,
       paymentMethod: "Pix",
       cardFee: 0,
       installments: [],
@@ -8024,7 +8023,7 @@ function BusinessSaleModal({
         />
         <MoneyInput label="Valor recebido" value={draft.receivedAmount} onChange={(receivedAmount) => update({ receivedAmount })} />
         <TextInput
-          label="Data do fechamento"
+          label="Data da venda"
           type="date"
           value={draft.closedDate}
           onChange={(closedDate) =>
@@ -12649,6 +12648,7 @@ export default function ReveeNorthApp() {
                     {(workspaceMode === "business"
                       ? [
                           [ArrowDownLeft, "Nova venda", () => {
+                            setSelectedMonth(monthKey(getTodayKey()));
                             setActive("Vendas");
                             setBusinessSaleModalOpen(true);
                           }],
@@ -12906,7 +12906,6 @@ export default function ReveeNorthApp() {
       ) : null}
       {businessSaleModalOpen ? (
         <BusinessSaleModal
-          selectedMonth={selectedMonth}
           onClose={() => setBusinessSaleModalOpen(false)}
           onSave={handleSaveBusinessSale}
         />
@@ -12914,7 +12913,6 @@ export default function ReveeNorthApp() {
       {selectedBusinessSale ? (
         <BusinessSaleModal
           sale={selectedBusinessSale}
-          selectedMonth={selectedMonth}
           onClose={() => setSelectedBusinessSale(null)}
           onSave={handleSaveBusinessSale}
           onDelete={handleDeleteBusinessSale}
