@@ -5206,13 +5206,17 @@ function DebtsView({
   onNewDebt,
   onOpenDebt,
   onPayDebt,
+  onDeleteDebts,
 }: {
   debts: NameCleanupDebt[];
   onNewDebt: () => void;
   onOpenDebt: (debt: NameCleanupDebt) => void;
   onPayDebt: (id: number) => void;
+  onDeleteDebts: (ids: number[]) => void;
 }) {
   const [responsibleFilter, setResponsibleFilter] = useState("todos");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const responsibleOptions = Array.from(
     new Set(debts.map((debt) => debt.responsible?.trim()).filter(Boolean) as string[]),
   ).sort((a, b) => a.localeCompare(b));
@@ -5230,6 +5234,9 @@ function DebtsView({
   const totalOpen = sum(openDebts, (debt) => debt.currentAmount);
   const totalPaid = sum(paidDebts, (debt) => debt.paidAmount ?? debt.currentAmount);
   const totalOriginal = sum(visibleDebts, (debt) => debt.originalAmount);
+  const selectedDebts = visibleDebts.filter((debt) => selectedIds.includes(debt.id));
+  const selectedTotal = sum(selectedDebts, (debt) => debt.status === "paga" ? debt.paidAmount ?? debt.currentAmount : debt.currentAmount);
+  const allVisibleSelected = Boolean(visibleDebts.length) && visibleDebts.every((debt) => selectedIds.includes(debt.id));
 
   const summaryItems = [
     { label: "Aberto agora", value: formatCurrency(totalOpen), helper: `${openDebts.length} dívida(s) para negociar`, icon: CircleAlert, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
@@ -5267,11 +5274,19 @@ function DebtsView({
             <p className="mt-1 text-xs font-semibold text-[var(--muted)]">Ordem automática da mais barata para a mais cara pelo valor atualizado.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {selectionMode ? (
+              <div className="flex min-h-11 items-center rounded-2xl bg-[#211d19]/5 px-4 text-xs font-extrabold text-[var(--foreground)] dark:bg-white/8">
+                {formatCurrency(selectedTotal)} • {selectedIds.length} selecionada(s)
+              </div>
+            ) : null}
             <label className="block">
               <span className="sr-only">Filtrar responsável</span>
               <select
                 value={responsibleFilter}
-                onChange={(event) => setResponsibleFilter(event.target.value)}
+                onChange={(event) => {
+                  setResponsibleFilter(event.target.value);
+                  setSelectedIds([]);
+                }}
                 className="h-11 rounded-2xl border border-[var(--line)] bg-white/70 px-4 text-xs font-extrabold outline-none focus:border-[#d75c27] dark:bg-white/8"
               >
                 <option value="todos">Todos responsáveis</option>
@@ -5281,6 +5296,40 @@ function DebtsView({
                 {debts.some((debt) => !debt.responsible?.trim()) ? <option value="Sem responsável">Sem responsável</option> : null}
               </select>
             </label>
+            {visibleDebts.length ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectionMode((current) => !current);
+                  setSelectedIds([]);
+                }}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--line)] bg-white/70 px-4 text-xs font-extrabold transition hover:border-[#d75c27]/40 dark:bg-white/8"
+              >
+                {selectionMode ? "Concluir" : "Selecionar"}
+              </button>
+            ) : null}
+            {selectionMode && visibleDebts.length ? (
+              <button
+                type="button"
+                onClick={() => setSelectedIds(allVisibleSelected ? [] : visibleDebts.map((debt) => debt.id))}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--line)] bg-white/70 px-4 text-xs font-extrabold transition hover:border-[#d75c27]/40 dark:bg-white/8"
+              >
+                {allVisibleSelected ? "Limpar seleção" : "Selecionar tudo"}
+              </button>
+            ) : null}
+            {selectionMode && selectedIds.length ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteDebts(selectedIds);
+                  setSelectedIds([]);
+                  setSelectionMode(false);
+                }}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-4 text-xs font-extrabold text-red-600 transition hover:border-red-300"
+              >
+                Excluir selecionadas
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onNewDebt}
@@ -5298,12 +5347,38 @@ function DebtsView({
               key={debt.id}
               role="button"
               tabIndex={0}
-              onClick={() => onOpenDebt(debt)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onOpenDebt(debt);
+              onClick={() => {
+                if (selectionMode) {
+                  setSelectedIds((current) => current.includes(debt.id) ? current.filter((id) => id !== debt.id) : [...current, debt.id]);
+                  return;
+                }
+                onOpenDebt(debt);
               }}
-              className="grid cursor-pointer gap-4 rounded-[24px] border border-[var(--line)] bg-white/62 p-4 transition hover:bg-white dark:bg-white/6 xl:grid-cols-[minmax(260px,1fr)_0.7fr_0.7fr_auto] xl:items-center"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  if (selectionMode) {
+                    setSelectedIds((current) => current.includes(debt.id) ? current.filter((id) => id !== debt.id) : [...current, debt.id]);
+                  } else {
+                    onOpenDebt(debt);
+                  }
+                }
+              }}
+              className={`grid cursor-pointer gap-4 rounded-[24px] border border-[var(--line)] bg-white/62 p-4 transition hover:bg-white dark:bg-white/6 ${selectionMode ? "xl:grid-cols-[42px_minmax(260px,1fr)_0.7fr_0.7fr_auto]" : "xl:grid-cols-[minmax(260px,1fr)_0.7fr_0.7fr_auto]"} xl:items-center`}
             >
+              {selectionMode ? (
+                <label className="flex h-10 w-10 cursor-pointer items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(debt.id)}
+                    onChange={(event) =>
+                      setSelectedIds((current) =>
+                        event.target.checked ? [...current, debt.id] : current.filter((id) => id !== debt.id),
+                      )
+                    }
+                    className="h-5 w-5 rounded border-[var(--line)] accent-[#d75c27]"
+                  />
+                </label>
+              ) : null}
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#d75c27]/10 text-xs font-black text-[#d75c27]">
                   {index + 1}
@@ -5319,11 +5394,12 @@ function DebtsView({
               <Field label="Atualizado" value={formatCurrency(debt.currentAmount)} />
               <button
                 type="button"
+                disabled={selectionMode}
                 onClick={(event) => {
                   event.stopPropagation();
                   onPayDebt(debt.id);
                 }}
-                className="rounded-2xl bg-[#211d19] px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] dark:bg-[#d75c27]"
+                className="rounded-2xl bg-[#211d19] px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#d75c27] disabled:cursor-not-allowed disabled:opacity-45 dark:bg-[#d75c27]"
               >
                 Paguei
               </button>
@@ -5343,12 +5419,42 @@ function DebtsView({
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2f9f73]">Dívidas pagas</p>
           <div className="mt-4 divide-y divide-[#211d19]/8 dark:divide-white/10">
             {paidDebts.map((debt) => (
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 key={debt.id}
-                onClick={() => onOpenDebt(debt)}
-                className="grid w-full gap-3 py-3 text-left sm:grid-cols-[1fr_150px_150px] sm:items-center"
+                onClick={() => {
+                  if (selectionMode) {
+                    setSelectedIds((current) => current.includes(debt.id) ? current.filter((id) => id !== debt.id) : [...current, debt.id]);
+                    return;
+                  }
+                  onOpenDebt(debt);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    if (selectionMode) {
+                      setSelectedIds((current) => current.includes(debt.id) ? current.filter((id) => id !== debt.id) : [...current, debt.id]);
+                    } else {
+                      onOpenDebt(debt);
+                    }
+                  }
+                }}
+                className={`grid w-full cursor-pointer gap-3 py-3 text-left ${selectionMode ? "sm:grid-cols-[42px_1fr_150px_150px]" : "sm:grid-cols-[1fr_150px_150px]"} sm:items-center`}
               >
+                {selectionMode ? (
+                  <label className="flex h-10 w-10 cursor-pointer items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(debt.id)}
+                      onChange={(event) =>
+                        setSelectedIds((current) =>
+                          event.target.checked ? [...current, debt.id] : current.filter((id) => id !== debt.id),
+                        )
+                      }
+                      className="h-5 w-5 rounded border-[var(--line)] accent-[#d75c27]"
+                    />
+                  </label>
+                ) : null}
                 <span>
                   <span className="block text-sm font-extrabold">{debt.name}</span>
                   <span className="block text-xs font-semibold text-[var(--muted)]">
@@ -5357,7 +5463,7 @@ function DebtsView({
                 </span>
                 <span className="text-xs font-bold text-[var(--muted)]">{debt.paidAt ? formatDate(debt.paidAt) : "Pago"}</span>
                 <span className="text-sm font-black text-emerald-600">{formatCurrency(debt.paidAmount ?? debt.currentAmount)}</span>
-              </button>
+              </div>
             ))}
           </div>
         </Card>
@@ -11027,6 +11133,7 @@ function ActiveView({
   onNewDebt,
   onOpenDebt,
   onPayDebt,
+  onDeleteDebts,
   onToggleObjective,
   onRemoveObjective,
   onNewObjective,
@@ -11094,6 +11201,7 @@ function ActiveView({
   onNewDebt: () => void;
   onOpenDebt: (debt: NameCleanupDebt) => void;
   onPayDebt: (id: number) => void;
+  onDeleteDebts: (ids: number[]) => void;
   onToggleObjective: (id: number) => void;
   onRemoveObjective: (id: number) => void;
   onNewObjective: () => void;
@@ -11206,6 +11314,7 @@ function ActiveView({
         onNewDebt={onNewDebt}
         onOpenDebt={onOpenDebt}
         onPayDebt={onPayDebt}
+        onDeleteDebts={onDeleteDebts}
       />
     );
   }
@@ -12061,6 +12170,15 @@ export default function ReveeNorthApp() {
     showFeedback("Dívida removida.", "A lista foi atualizada.");
   };
 
+  const handleDeleteDebts = (ids: number[]) => {
+    setDebts((current) => {
+      const nextDebts = current.filter((debt) => !ids.includes(debt.id));
+      persistCloudPatchNow({ debts: nextDebts });
+      return nextDebts;
+    });
+    showFeedback("Dívidas removidas.", `${ids.length} dívida(s) saíram da lista.`);
+  };
+
   const handleCreateIncome = (income: Income) => {
     setIncomes((current) => {
       const nextIncomes = [income, ...current];
@@ -12803,6 +12921,7 @@ export default function ReveeNorthApp() {
             onNewDebt={() => setDebtModalOpen(true)}
             onOpenDebt={setSelectedDebt}
             onPayDebt={handlePayDebt}
+            onDeleteDebts={handleDeleteDebts}
             onToggleObjective={handleToggleObjective}
             onRemoveObjective={handleRemoveObjective}
             onNewObjective={() => setObjectiveModalOpen(true)}
