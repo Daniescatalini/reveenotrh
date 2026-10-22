@@ -24,6 +24,14 @@ type SupabaseAuthResponse = SupabaseSession & {
 
 const sessionKey = "reveenorth:supabase-session";
 
+class SupabaseRequestError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function headers(accessToken?: string) {
   return {
     apikey: SUPABASE_ANON_KEY,
@@ -50,7 +58,7 @@ async function request<T>(path: string, init: RequestInit = {}, accessToken?: st
 
   if (!response.ok) {
     const message = data?.msg || data?.message || data?.error_description || data?.error || "Nao foi possivel concluir a acao.";
-    throw new Error(message);
+    throw new SupabaseRequestError(message, response.status);
   }
 
   return data as T;
@@ -85,14 +93,42 @@ export function readSession() {
   }
 }
 
+const refreshing = new Map<string, Promise<SupabaseSession>>();
+
 export async function refreshSession(session: SupabaseSession) {
-  const data = await request<SupabaseAuthResponse>("/auth/v1/token?grant_type=refresh_token", {
-    method: "POST",
-    body: JSON.stringify({ refresh_token: session.refresh_token }),
-  });
-  const nextSession = normalizeSession(data);
-  saveSession(nextSession);
-  return nextSession;
+  let pending = refreshing.get(session.refresh_token);
+  if (!pending) {
+    pending = (async () => {
+      const data = await request<SupabaseAuthResponse>("/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: session.refresh_token }),
+      });
+      const nextSession = normalizeSession(data);
+      saveSession(nextSession);
+      return nextSession;
+    })();
+    refreshing.set(session.refresh_token, pending);
+  }
+  try {
+    return await pending;
+  } finally {
+    if (refreshing.get(session.refresh_token) === pending) refreshing.delete(session.refresh_token);
+  }
+}
+
+async function authenticatedRequest<T>(session: SupabaseSession, path: string, init: RequestInit) {
+  const stored = readSession();
+  let current = stored?.user.id === session.user.id ? stored : session;
+  if (current.expires_at && current.expires_at < Math.floor(Date.now() / 1000) + 60) {
+    current = await refreshSession(current);
+  }
+  try {
+    return await request<T>(path, init, current.access_token);
+  } catch (error) {
+    if (!(error instanceof SupabaseRequestError) || error.status !== 401) throw error;
+    current = await refreshSession(current);
+    return request<T>(path, init, current.access_token);
+  }
 }
 
 export async function signInWithPassword(email: string, password: string) {
@@ -137,26 +173,32 @@ export async function signOut(session: SupabaseSession | null) {
 }
 
 export async function loadCloudState<T>(session: SupabaseSession) {
-  const rows = await request<{ state: T }[]>(
+  const rows = await authenticatedRequest<{ state: T }[]>(
+    session,
     `/rest/v1/reveenorth_app_state?user_id=eq.${session.user.id}&select=state`,
     { method: "GET" },
-    session.access_token,
   );
   return rows[0]?.state ?? null;
 }
 
+const pendingSaves = new Map<string, Promise<unknown>>();
+
 export async function saveCloudState<T>(session: SupabaseSession, state: T) {
-  await request(
+  const body = JSON.stringify({ user_id: session.user.id, state, updated_at: new Date().toISOString() });
+  const previous = pendingSaves.get(session.user.id) ?? Promise.resolve();
+  const pending = previous.catch(() => undefined).then(() => authenticatedRequest(
+    session,
     "/rest/v1/reveenorth_app_state?on_conflict=user_id",
     {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates" },
-      body: JSON.stringify({
-        user_id: session.user.id,
-        state,
-        updated_at: new Date().toISOString(),
-      }),
+      body,
     },
-    session.access_token,
-  );
+  ));
+  pendingSaves.set(session.user.id, pending);
+  try {
+    await pending;
+  } finally {
+    if (pendingSaves.get(session.user.id) === pending) pendingSaves.delete(session.user.id);
+  }
 }

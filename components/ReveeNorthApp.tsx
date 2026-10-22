@@ -115,6 +115,7 @@ import {
 } from "@/lib/supabase-lite";
 import type { SupabaseSession } from "@/lib/supabase-lite";
 import historicalBusinessSales from "@/data/historical-business-sales.json";
+import { mergePersonalIncomes } from "@/lib/personal-incomes";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
@@ -11485,6 +11486,7 @@ export default function ReveeNorthApp() {
   const [authReady, setAuthReady] = useState(false);
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
   const [cloudReady, setCloudReady] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("reveenorth:onboarding-complete") === "true"
@@ -11666,6 +11668,7 @@ export default function ReveeNorthApp() {
   useEffect(() => {
     let mounted = true;
     const bootstrap = async () => {
+      let loaded = false;
       const storedSession = readSession();
       if (!storedSession) {
         if (mounted) {
@@ -11688,15 +11691,16 @@ export default function ReveeNorthApp() {
         try {
           const cloudState = await loadCloudState<ReveeNorthCloudState>(session);
           if (cloudState && mounted && shouldApplyIncomingCloudState(cloudState)) applyCloudState(cloudState);
+          loaded = true;
         } catch {
-          // If the Supabase table has not been created yet, keep the local data.
+          if (mounted) setCloudError("Não foi possível conferir os dados na nuvem. A sincronização está pausada para proteger seus registros. Recarregue a página para tentar novamente.");
         }
       } catch {
         localStorage.removeItem("reveenorth:logged-in");
       } finally {
         if (mounted) {
           setAuthReady(true);
-          setCloudReady(true);
+          setCloudReady(loaded);
         }
       }
     };
@@ -11732,7 +11736,7 @@ export default function ReveeNorthApp() {
     [business.payroll],
   );
   const personalIncomes = useMemo(
-    () => [...incomes, ...payrollPersonalIncomes],
+    () => mergePersonalIncomes(incomes, payrollPersonalIncomes),
     [incomes, payrollPersonalIncomes],
   );
 
@@ -11828,7 +11832,9 @@ export default function ReveeNorthApp() {
     localStorage.setItem("reveenorth:app-state", JSON.stringify(cloudState));
     if (!authSession || !cloudReady) return;
     const timeout = window.setTimeout(() => {
-      saveCloudState(authSession, cloudState).catch(() => undefined);
+      saveCloudState(authSession, cloudState)
+        .then(() => setCloudError(null))
+        .catch(() => setCloudError("As alterações estão salvas neste navegador, mas ainda não foram confirmadas na nuvem. Confira sua conexão e tente salvar novamente."));
     }, 700);
     return () => window.clearTimeout(timeout);
   }, [authSession, cloudReady, cloudState]);
@@ -11839,7 +11845,9 @@ export default function ReveeNorthApp() {
     const nextState = { ...cloudState, ...patch, updatedAt };
     localStorage.setItem("reveenorth:app-state", JSON.stringify(nextState));
     if (authSession && cloudReady) {
-      saveCloudState(authSession, nextState).catch(() => undefined);
+      saveCloudState(authSession, nextState)
+        .then(() => setCloudError(null))
+        .catch(() => setCloudError("As alterações estão salvas neste navegador, mas ainda não foram confirmadas na nuvem. Confira sua conexão e tente salvar novamente."));
     }
   };
 
@@ -12572,6 +12580,8 @@ export default function ReveeNorthApp() {
       }
 
       setAuthSession(session);
+      setCloudReady(false);
+      setCloudError(null);
       localStorage.setItem("reveenorth:logged-in", "true");
       if (startOnboarding) {
         const createdAt = getTodayKey();
@@ -12590,7 +12600,9 @@ export default function ReveeNorthApp() {
           const remoteState = await loadCloudState<ReveeNorthCloudState>(session);
           if (remoteState) applyCloudState(remoteState);
         } catch {
-          // Keeps local state when the cloud table is not ready yet.
+          setCloudError("Não foi possível conferir os dados na nuvem. A sincronização está pausada para proteger seus registros. Recarregue a página para tentar novamente.");
+          setLoggedIn(true);
+          return { ok: true };
         }
       }
       setUser((current) => {
@@ -12690,6 +12702,11 @@ export default function ReveeNorthApp() {
         }`}
       >
         <div className="mx-auto max-w-7xl">
+          {cloudError ? (
+            <p role="alert" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+              {cloudError}
+            </p>
+          ) : null}
           <header className="app-page-header relative z-30 mb-4 flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/28 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#050505] dark:backdrop-blur-none sm:p-5 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${workspaceMode === "business" ? "text-[#0f766e]" : "text-[#d75c27]"}`}>
