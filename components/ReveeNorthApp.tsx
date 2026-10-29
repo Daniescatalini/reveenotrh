@@ -142,7 +142,6 @@ const businessNavItems = [
 ];
 
 const DEFAULT_ACCOUNT_CREATED_AT = "2026-06-11";
-const STUCK_FOOTBALL_BILLS_CLEANUP_KEY = "reveenorth:cleanup-football-bills-2026-07-25";
 
 const statusLabels: Record<BillStatus | "todas", string> = {
   todas: "Todas",
@@ -1079,13 +1078,19 @@ function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string)
     const generateUntil = repeatEndMonth < horizon ? repeatEndMonth : horizon;
     for (let month = addMonths(monthKey(root.dueDate), 1); month <= generateUntil; month = addMonths(month, 1)) {
       if (month < monthKey(accountCreatedAt) || existingKeys.has(`${recurrenceId}:${month}`)) continue;
+      const latest = nextBills
+        .filter((bill) => billRecurrenceKey(bill) === recurrenceId && monthKey(bill.dueDate) < month)
+        .sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0] ?? root;
       nextBills.push({
         ...root,
+        name: root.recurrenceAppearance && month >= root.recurrenceAppearance.fromMonth ? root.recurrenceAppearance.name : latest.name,
+        logoUrl: root.recurrenceAppearance && month >= root.recurrenceAppearance.fromMonth ? root.recurrenceAppearance.logoUrl : latest.logoUrl,
         id: Date.now() + nextBills.length,
         dueDate: nextDueDateForMonth(root.dueDate, month),
         status: "pendente",
         paidDate: undefined,
         paidAmount: undefined,
+        paidLateDays: undefined,
         recurrenceId,
         generatedFromId: root.id,
       });
@@ -1093,24 +1098,7 @@ function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string)
     }
   });
 
-  const rootsByRecurrence = new Map(
-    Object.values(fixedRoots).map((root) => [root.recurrenceId ?? String(root.id), root]),
-  );
-
-  return nextBills
-    .map((bill) => {
-      const normalized = normalizeBillStatus(bill);
-      const root = rootsByRecurrence.get(normalized.recurrenceId ?? String(normalized.id));
-      if (
-        root?.logoUrl &&
-        normalized.generatedFromId !== undefined &&
-        normalized.logoUrl !== root.logoUrl
-      ) {
-        return { ...normalized, logoUrl: root.logoUrl };
-      }
-      return normalized;
-    })
-    .sort(sortByPaymentPriority);
+  return nextBills.map((bill) => normalizeBillStatus(bill)).sort(sortByPaymentPriority);
 }
 
 function readFileAsDataUrl(file: File, maxSize = 320) {
@@ -1188,16 +1176,6 @@ function preserveBillLogos(incomingBills: Bill[], currentBills: Bill[]) {
     const currentLogo = currentById.get(bill.id)?.logoUrl;
     return !bill.logoUrl && currentLogo ? { ...bill, logoUrl: currentLogo } : bill;
   });
-}
-
-function cleanupStuckFootballBillsOnce(incomingBills: Bill[]) {
-  if (typeof window === "undefined") return incomingBills;
-  if (localStorage.getItem(STUCK_FOOTBALL_BILLS_CLEANUP_KEY) === "done") return incomingBills;
-  const cleanedBills = incomingBills.filter((bill) => !normalizeCategoryName(bill.name).includes("futebol"));
-  if (cleanedBills.length !== incomingBills.length) {
-    localStorage.setItem(STUCK_FOOTBALL_BILLS_CLEANUP_KEY, "done");
-  }
-  return cleanedBills;
 }
 
 function buildVisibleBills(allBills: Bill[], selectedMonth: string) {
@@ -3781,7 +3759,6 @@ function BillsView({
     .filter((bill) => bill.status === "paga")
     .sort((a, b) => new Date(`${a.dueDate}T12:00:00`).getTime() - new Date(`${b.dueDate}T12:00:00`).getTime());
   const regularBills = [...pendingBills, ...completedBills];
-  const paidBills = bills.filter((bill) => bill.status === "paga");
   const pendingOrOverdueBills = bills.filter((bill) => bill.status !== "paga");
   const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill.id));
   const selectedTotal = sum(selectedBills, (bill) => bill.status === "paga" ? bill.paidAmount ?? bill.expectedAmount : bill.expectedAmount);
@@ -3789,11 +3766,7 @@ function BillsView({
   const paymentHistory = paymentHistoryBills
     .filter((bill) => bill.status === "paga" && bill.paidDate)
     .sort((a, b) => String(b.paidDate).localeCompare(String(a.paidDate)) || a.name.localeCompare(b.name, "pt-BR"));
-  const paidBillIds = new Set(paidBills.map((bill) => bill.id));
-  const paidThisMonth = [
-    ...paidBills,
-    ...paymentHistory.filter((bill) => !paidBillIds.has(bill.id)),
-  ];
+  const paidThisMonth = paymentHistoryBills.filter((bill) => bill.status === "paga");
   const totalPaid = sum(paidThisMonth, (bill) => bill.paidAmount ?? bill.expectedAmount);
   const totalMissing = sum(pendingOrOverdueBills, (bill) => bill.expectedAmount);
   const totalOverall = totalPaid + totalMissing;
@@ -3804,7 +3777,7 @@ function BillsView({
     );
   };
   const summaryItems = [
-    { label: "Total geral", value: formatCurrency(totalOverall), helper: `${bills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
+    { label: "Total geral", value: formatCurrency(totalOverall), helper: `${paidThisMonth.length + pendingOrOverdueBills.length} conta(s) no período`, icon: ReceiptText, accent: "#211d19", soft: "bg-[#211d19]/7 text-[#211d19]" },
     { label: "Já pago", value: formatCurrency(totalPaid), helper: `${paidThisMonth.length} conta(s) pagas`, icon: Check, accent: "#2f9f73", soft: "bg-[#0f766e]/16 text-[#0f766e]" },
     { label: "Falta pagar", value: formatCurrency(totalMissing), helper: `${pendingOrOverdueBills.length} conta(s) abertas`, icon: Coins, accent: "#d75c27", soft: "bg-[#d75c27]/10 text-[#b94d20]" },
   ];
@@ -7610,7 +7583,7 @@ function AccountModal({
             </div>
           </div>
           <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">
-            Cada mês pode ter valor próprio sem alterar os outros.
+            O nome e a imagem valem também para os próximos meses não pagos. Cada mês mantém seu próprio valor.
           </p>
         </div>
       ) : null}
@@ -11622,7 +11595,7 @@ export default function ReveeNorthApp() {
     if (safeState.user) setUser(safeState.user);
     if (safeState.realBalance) setRealBalance(safeState.realBalance);
     if (safeState.bills) {
-      setBills((current) => preserveBillLogos(cleanupStuckFootballBillsOnce(safeState.bills!), current));
+      setBills((current) => ensureFixedBillInstances(preserveBillLogos(safeState.bills!, current), safeState.accountCreatedAt ?? accountCreatedAt));
     }
     if (safeState.variableExpenses) setVariableExpenses(cleanKnownVariableExpenses(safeState.variableExpenses));
     if (safeState.debts) setDebts(safeState.debts);
@@ -11640,7 +11613,7 @@ export default function ReveeNorthApp() {
     if (typeof safeState.darkMode === "boolean") setDarkMode(safeState.darkMode);
     if (typeof safeState.sidebarCollapsed === "boolean") setSidebarCollapsed(safeState.sidebarCollapsed);
     if (safeState.activeView) setActive(safeState.activeView);
-    if (safeState.selectedMonth) setSelectedMonth(safeState.selectedMonth);
+    // Opening the app always starts in the current month; cloud loading must not reset navigation.
     if (typeof safeState.onboardingComplete === "boolean") setOnboardingComplete(safeState.onboardingComplete);
   };
 
@@ -12033,6 +12006,7 @@ export default function ReveeNorthApp() {
           if (bill.id === updatedBill.id) {
             return normalizeBillStatus({
               ...updatedBill,
+              recurrenceAppearance: updatedBill.fixed ? { fromMonth: monthKey(updatedBill.dueDate), name: updatedBill.name, logoUrl: updatedBill.logoUrl } : undefined,
               repeatMonths: updatedBill.fixed ? updatedBill.repeatMonths ?? "indefinido" : undefined,
               recurrenceId: updatedBill.fixed ? recurrenceId : undefined,
             });
@@ -12046,8 +12020,15 @@ export default function ReveeNorthApp() {
           ) {
             return null;
           }
-          if (updatedBill.fixed && updatedBill.logoUrl && bill.recurrenceId === recurrenceId && bill.generatedFromId !== undefined && bill.status !== "paga" && bill.dueDate > updatedBill.dueDate) {
-            return { ...bill, logoUrl: updatedBill.logoUrl };
+          if (updatedBill.fixed && billRecurrenceKey(bill) === recurrenceId && bill.generatedFromId === undefined) {
+            return {
+              ...bill,
+              repeatMonths: repeatEndMonth === "9999-12" ? "indefinido" : Math.max(1, monthDistance(monthKey(bill.dueDate), repeatEndMonth) + 1),
+              recurrenceAppearance: { fromMonth: monthKey(updatedBill.dueDate), name: updatedBill.name, logoUrl: updatedBill.logoUrl },
+            };
+          }
+          if (updatedBill.fixed && billRecurrenceKey(bill) === recurrenceId && bill.generatedFromId !== undefined && bill.status !== "paga" && bill.dueDate > updatedBill.dueDate) {
+            return { ...bill, name: updatedBill.name, logoUrl: updatedBill.logoUrl };
           }
           return bill;
         })

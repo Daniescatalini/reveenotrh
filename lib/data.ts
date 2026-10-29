@@ -19,6 +19,7 @@ export type Bill = {
   repeatMonths?: number | "indefinido";
   recurrenceId?: string;
   generatedFromId?: number;
+  recurrenceAppearance?: { fromMonth: string; name: string; logoUrl?: string };
 };
 
 export type Income = {
