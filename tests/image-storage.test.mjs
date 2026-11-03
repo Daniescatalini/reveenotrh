@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-import {writeLocalCache} from '../lib/browser-storage.ts';
+import {writeLocalCache,readLocalCache,packLocalCache} from '../lib/browser-storage.ts';
 afterEach(()=>{delete globalThis.localStorage;delete globalThis.window;});
 test('full browser storage preserves previous data and allows execution to continue',()=>{
  const saved=new Map([['reveenorth:app-state','previous']]);let notified=0;
  globalThis.localStorage={setItem(){throw new DOMException('Full','QuotaExceededError');},getItem:key=>saved.get(key)};
  globalThis.window={dispatchEvent(){notified++;}};
  assert.equal(writeLocalCache('reveenorth:app-state','new'),false);
- assert.equal(saved.get('reveenorth:app-state'),'previous');assert.equal(notified,1);
+ assert.equal(saved.get('reveenorth:app-state'),'previous');assert.equal(notified,0);
 });
 test('successful cache write reports success',()=>{
  let value;globalThis.localStorage={setItem(k,v){value=v;}};
@@ -34,3 +34,14 @@ test('invalid, oversized and undecodable images are rejected without storing the
  await assert.rejects(decoder(false).readFileAsDataUrl({type:'image/png',size:1}),/Imagem inválida/);
  await assert.rejects(decoder(true,false).readFileAsDataUrl({type:'image/png',size:1}),/preparar/);
 });
+
+ test('repeated pictures use one local copy and round-trip without losing any data',()=>{
+ const image='data:image/webp;base64,'+'A'.repeat(10000);
+ const state={bills:Array.from({length:20},(_,id)=>({id,logoUrl:image,amount:244.40})),other:{value:'unchanged'}};
+ const raw=JSON.stringify(state);const packed=packLocalCache(raw);
+ assert.ok(packed.length<raw.length/10);
+ globalThis.localStorage={getItem:()=>packed};
+ assert.deepEqual(JSON.parse(readLocalCache('reveenorth:app-state')),state);
+ globalThis.localStorage={getItem:()=>raw};
+ assert.equal(readLocalCache('reveenorth:app-state'),raw);
+ });

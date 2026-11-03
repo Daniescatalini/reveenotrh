@@ -1,6 +1,6 @@
 "use client";
 
-import { writeLocalCache } from "@/lib/browser-storage";
+import { readLocalCache, writeLocalCache } from "@/lib/browser-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
@@ -919,8 +919,8 @@ function buildBusinessMetrics(business: BusinessState, selectedMonth: string) {
   const open = sum(
     data.sales.filter((sale) => sale.paymentMethod !== "Boleto"),
     saleOpenTotal,
-  ) + sum(data.receivables, (item) => item.installment.amount);
-  const expensesPaid = sum(data.expenses.filter((bill) => bill.status === "paga"), (bill) => bill.paidAmount ?? bill.expectedAmount);
+  ) + sum(data.receivables, (item) => Math.max(0, item.installment.amount - (item.installment.received ? item.installment.receivedAmount ?? item.installment.amount : 0)));
+  const expensesPaid = sum(business.expenses.filter((bill) => bill.status === "paga" && monthKey(bill.paidDate ?? bill.dueDate) === selectedMonth), (bill) => bill.paidAmount ?? bill.expectedAmount);
   const expensesOpen = sum(data.expenses.filter((bill) => bill.status !== "paga"), (bill) => bill.expectedAmount);
   const proLabore = sum(data.payroll.filter((item) => item.type === "Pró-labore"), (item) => item.amount);
   const bonus = sum(data.payroll.filter((item) => item.type === "Bônus"), (item) => item.amount);
@@ -934,8 +934,8 @@ function buildBusinessMetrics(business: BusinessState, selectedMonth: string) {
   const goalRemaining = Math.max(0, business.settings.annualRevenueGoal - yearClosed);
   const monthlyGoalRequired = goalRemaining / monthsRemainingInYear(selectedMonth);
   const averageTicket = data.sales.length ? closed / data.sales.length : 0;
-  const netRevenue = Math.max(0, received - fees);
-  const profit = received - expensesPaid - proLabore - bonus - fees - saved;
+  const netRevenue = received;
+  const profit = received - expensesPaid - proLabore - bonus - saved;
 
   return {
     ...data,
@@ -1163,7 +1163,7 @@ function sanitizeLoadedState(state: Partial<ReveeNorthCloudState>, accountCreate
 
 function shouldApplyIncomingCloudState(incoming: Partial<ReveeNorthCloudState>) {
   if (typeof window === "undefined") return true;
-  const savedState = localStorage.getItem("reveenorth:app-state");
+  const savedState = readLocalCache("reveenorth:app-state");
   if (!savedState) return true;
   try {
     const localState = JSON.parse(savedState) as Partial<ReveeNorthCloudState>;
@@ -1332,7 +1332,7 @@ function buildMetrics(data: MonthData) {
   const previousPaidBills = data.previousPaidBills;
   const previousPaid = sum(previousPaidBills, (bill) => bill.paidAmount ?? bill.expectedAmount);
   const previousVariableExpenses = sum(
-    data.previousVariableExpenses.filter((expense) => !expense.ignored),
+    data.previousVariableExpenses.filter((expense) => !expense.ignored && !isShortTermRdbMovement(expense)),
     (expense) => expense.amount,
   );
   const previousOut = previousPaid + previousVariableExpenses;
@@ -1395,11 +1395,11 @@ function buildDefaultPlanningState(metrics: ReturnType<typeof buildMetrics>, _ru
     plannedIncome,
     style: "equilibrado",
     distribution: [
-      { id: "contas-pagas", label: "Contas pagas", helper: "Pagamentos registrados no mês", value: Math.round(metrics.totalPaid), icon: "ReceiptText", tone: "orange" },
-      { id: "contas-abertas", label: "Contas abertas", helper: "Pendentes e atrasadas do mês", value: Math.round(openBills), icon: "Zap", tone: openBills > 0 ? "red" : "neutral" },
-      { id: "variaveis", label: "Variáveis", helper: "Mercado, iFood, combustível e compras", value: Math.round(metrics.totalVariableExpenses), icon: "ShoppingCart", tone: "green" },
-      { id: "reserva", label: "Reserva", helper: "Dinheiro realmente guardado", value: Math.round(metrics.reserveDestination), icon: "Shield", tone: "green" },
-      { id: "metas", label: "Metas", helper: "Valores guardados nas metas", value: Math.round(metrics.goalsDestination), icon: "Target", tone: "purple" },
+      { id: "contas-pagas", label: "Contas pagas", helper: "Pagamentos registrados no mês", value: metrics.totalPaid, icon: "ReceiptText", tone: "orange" },
+      { id: "contas-abertas", label: "Contas abertas", helper: "Pendentes e atrasadas do mês", value: openBills, icon: "Zap", tone: openBills > 0 ? "red" : "neutral" },
+      { id: "variaveis", label: "Variáveis", helper: "Mercado, iFood, combustível e compras", value: metrics.totalVariableExpenses, icon: "ShoppingCart", tone: "green" },
+      { id: "reserva", label: "Reserva", helper: "Dinheiro realmente guardado", value: metrics.reserveDestination, icon: "Shield", tone: "green" },
+      { id: "metas", label: "Metas", helper: "Valores guardados nas metas", value: metrics.goalsDestination, icon: "Target", tone: "purple" },
     ],
     monthGoals: [],
     expectedExpenses: [],
@@ -4753,7 +4753,7 @@ function BusinessDashboard({
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <div className="grid gap-3 md:grid-cols-2">
           <BusinessMetricCard label="Faturamento bruto" value={formatCurrency(metrics.closed)} helper={`${metrics.sales.length} venda(s) fechada(s) no mês`} icon={BadgeDollarSign} />
-          <BusinessMetricCard label="Faturamento líquido" value={formatCurrency(metrics.netRevenue)} helper="Recebido de fato menos taxas" icon={Wallet} tone="blue" />
+          <BusinessMetricCard label="Faturamento líquido" value={formatCurrency(metrics.netRevenue)} helper="Valor líquido que entrou na conta" icon={Wallet} tone="blue" />
           <BusinessMetricCard label="Taxas" value={formatCurrency(metrics.fees)} helper="Cartão de crédito no mês" icon={CreditCard} tone="amber" />
           <BusinessMetricCard label="Em aberto" value={formatCurrency(metrics.open)} helper="Boletos e saldos a receber" icon={CircleAlert} tone="dark" />
         </div>
@@ -4846,7 +4846,7 @@ function BusinessSalesView({
     { label: "Faturamento bruto", value: metrics.closed, helper: "Vendas fechadas no mês" },
     { label: "Recebido", value: metrics.received, helper: "Entrou de fato na conta" },
     { label: "Taxas", value: metrics.fees, helper: "Cartão e descontos" },
-    { label: "Faturamento líquido", value: metrics.netRevenue, helper: "Recebido menos taxas" },
+    { label: "Faturamento líquido", value: metrics.netRevenue, helper: "Valor líquido recebido" },
   ];
 
   return (
@@ -5075,7 +5075,7 @@ function BusinessBalanceView({
       </Card>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <BusinessMetricCard label="Faturamento bruto" value={formatCurrency(yearMetrics.closed)} helper="Tudo que foi fechado no ano" icon={BadgeDollarSign} />
-        <BusinessMetricCard label="Faturamento líquido" value={formatCurrency(yearMetrics.netRevenue)} helper="Recebido menos taxas" icon={Wallet} tone="blue" />
+        <BusinessMetricCard label="Faturamento líquido" value={formatCurrency(yearMetrics.netRevenue)} helper="Valor líquido recebido" icon={Wallet} tone="blue" />
         <BusinessMetricCard label="Lucro no ano" value={formatCurrency(yearMetrics.profit)} helper="Após saídas, salários e guardados" icon={TrendingUp} />
         <BusinessMetricCard label="Taxas" value={formatCurrency(yearMetrics.fees + taxTotal)} helper="Cartão e impostos pagos" icon={ReceiptText} tone="amber" />
         <BusinessMetricCard label="Guardado" value={formatCurrency(yearMetrics.saved)} helper={`Reserva ${formatCurrency(yearReserveSaved)} • Investido ${formatCurrency(yearInvested)}`} icon={PiggyBank} tone="dark" />
@@ -8081,11 +8081,10 @@ function BusinessSaleModal({
   const today = getTodayKey();
   const buildInstallments = (count: number, total: number, startDate: string) => {
     const startMonth = monthKey(startDate);
-    const dueDay = startDate.slice(8, 10) || "10";
     return Array.from({ length: count }, (_, index) => ({
       id: Date.now() + index,
-      dueDate: `${addMonths(startMonth, index)}-${dueDay}`,
-      amount: Math.round((total / count) * 100) / 100,
+      dueDate: nextDueDateForMonth(startDate, addMonths(startMonth, index)),
+      amount: (Math.floor(Math.round(total * 100) / count) + (index < Math.round(total * 100) % count ? 1 : 0)) / 100,
       received: false,
     }));
   };
@@ -9396,6 +9395,7 @@ function SettingsView({
   onImportHistoricalBusinessSales,
   darkMode,
   setDarkMode,
+  allVariableExpenses,
   allIncomes,
   allBills,
   allGoals,
@@ -9426,6 +9426,7 @@ function SettingsView({
   onImportHistoricalBusinessSales: () => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
+  allVariableExpenses: VariableExpense[];
   allIncomes: Income[];
   allBills: Bill[];
   allGoals: Goal[];
@@ -9596,6 +9597,7 @@ function SettingsView({
 
         {selectedSection === "dados" ? (
           <DataPanel
+            variableExpenses={allVariableExpenses}
             incomes={allIncomes}
             bills={allBills}
             goals={allGoals}
@@ -10225,6 +10227,7 @@ function SecurityPanel({
 }
 
 function DataPanel({
+  variableExpenses,
   incomes,
   bills,
   goals,
@@ -10234,6 +10237,7 @@ function DataPanel({
   onResetFinancialData,
   onImportHistoricalBusinessSales,
 }: {
+  variableExpenses: VariableExpense[];
   incomes: Income[];
   bills: Bill[];
   goals: Goal[];
@@ -10256,16 +10260,18 @@ function DataPanel({
   const filteredBills = bills.filter((bill) => inRange(bill.dueDate)).map((bill) => normalizeBillStatus(bill));
   const filteredGoals = goals.filter((goal) => inRange(goal.deadline));
   const received = sum(filteredIncomes, (income) => income.amount);
-  const paidBills = filteredBills.filter((bill) => bill.status === "paga");
+  const paidBills = bills.filter((bill) => bill.status === "paga" && inRange(bill.paidDate ?? bill.dueDate));
+  const filteredVariables = variableExpenses.filter((expense) => inRange(expense.date) && !expense.ignored && !isShortTermRdbMovement(expense));
+  const variableTotal = sum(filteredVariables, (expense) => expense.amount);
   const pendingBills = filteredBills.filter((bill) => bill.status === "pendente");
   const overdueBills = filteredBills.filter((bill) => bill.status === "atrasada");
   const paid = sum(paidBills, (bill) => bill.paidAmount ?? bill.expectedAmount);
   const pending = sum(pendingBills, (bill) => bill.expectedAmount);
   const overdue = sum(overdueBills, (bill) => bill.expectedAmount);
   const saved = sum(filteredGoals, (goal) => goal.current);
-  const free = Math.max(0, received - paid - pending - overdue - saved);
-  const periodMetrics = buildMetrics(buildPeriodMonthData(fromMonth, toMonth, incomes, bills, goals, []));
-  const previousPeriodMetrics = buildMetrics(buildPeriodMonthData(addMonths(fromMonth, -buildMonthRange(fromMonth, toMonth).length || -1), addMonths(fromMonth, -1), incomes, bills, goals, []));
+  const free = Math.max(0, received - paid - variableTotal - pending - overdue - saved);
+  const periodMetrics = buildMetrics(buildPeriodMonthData(fromMonth, toMonth, incomes, bills, goals, variableExpenses));
+  const previousPeriodMetrics = buildMetrics(buildPeriodMonthData(addMonths(fromMonth, -buildMonthRange(fromMonth, toMonth).length || -1), addMonths(fromMonth, -1), incomes, bills, goals, variableExpenses));
   const northScore = calculateNorthScore(periodMetrics, goals);
   const previousNorthScore = calculateNorthScore(previousPeriodMetrics, goals);
   const northScoreDelta = northScore - previousNorthScore;
@@ -10273,6 +10279,7 @@ function DataPanel({
     acc[bill.category] = (acc[bill.category] ?? 0) + (bill.paidAmount ?? bill.expectedAmount);
     return acc;
   }, {});
+  for (const expense of filteredVariables) categoryTotals[expense.category] = (categoryTotals[expense.category] ?? 0) + expense.amount;
   const topCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const topCategoryItems = topCategories.map(([label, value]) => ({
     label,
@@ -10283,12 +10290,12 @@ function DataPanel({
     .filter((option) => option.value >= fromMonth && option.value <= toMonth)
     .map((option) => {
       const monthIncomes = incomes.filter((income) => monthKey(income.receivedDate) === option.value);
-      const monthBills = bills.filter((bill) => monthKey(bill.dueDate) === option.value);
+      const monthBills = bills.filter((bill) => monthKey(bill.paidDate ?? bill.dueDate) === option.value);
       const monthGoals = goals.filter((goal) => monthKey(goal.deadline) === option.value);
       return {
         label: option.label.replace(" de ", " "),
         entradas: sum(monthIncomes, (income) => income.amount),
-        saidas: sum(monthBills.filter((bill) => bill.status === "paga"), (bill) => bill.paidAmount ?? bill.expectedAmount),
+        saidas: sum(monthBills.filter((bill) => bill.status === "paga"), (bill) => bill.paidAmount ?? bill.expectedAmount) + sum(filteredVariables.filter((expense) => monthKey(expense.date) === option.value), (expense) => expense.amount),
         guardado: sum(monthGoals, (goal) => goal.current),
       };
     });
@@ -10298,7 +10305,7 @@ function DataPanel({
     : 0;
 
   const exportPdf = () => {
-    if (!filteredIncomes.length && !filteredBills.length) {
+    if (!filteredIncomes.length && !filteredBills.length && !paidBills.length && !filteredVariables.length) {
       setEmptyMessage(true);
       return;
     }
@@ -10374,7 +10381,7 @@ function DataPanel({
             <section class="grid">
               ${[
                 ["Recebido", formatCurrency(received)],
-                ["Saídas", formatCurrency(paid)],
+                ["Saídas", formatCurrency(paid + variableTotal)],
                 ["Guardado", formatCurrency(saved)],
                 ["Livre para decidir", formatCurrency(free)],
                 ["Saldo informado", formatCurrency(realBalance.amount)],
@@ -10399,7 +10406,7 @@ function DataPanel({
             </div>
             <h2>Distribuição do dinheiro</h2>
             <section class="grid">
-              ${[["Contas pagas", paid],["Contas pendentes", pending],["Contas atrasadas", overdue],["Guardado", saved],["Livre", free]].map(([label, value]) => `<div class="card"><div class="label">${label}</div><div class="value">${formatCurrency(value as number)}</div></div>`).join("")}
+              ${[["Contas pagas", paid],["Gastos variáveis", variableTotal],["Contas pendentes", pending],["Contas atrasadas", overdue],["Guardado", saved],["Livre", free]].map(([label, value]) => `<div class="card"><div class="label">${label}</div><div class="value">${formatCurrency(value as number)}</div></div>`).join("")}
             </section>
             <h2>Metas principais</h2>
             <p>${filteredGoals.slice(0, 3).map((goal) => `${goal.name}: ${Math.round((goal.current / Math.max(goal.target, 1)) * 100)}%`).join(" • ") || "Nenhuma meta com data dentro do período selecionado."}</p>
@@ -11369,6 +11376,7 @@ function ActiveView({
   if (active === "Configurações") {
     return (
       <SettingsView
+        allVariableExpenses={workspaceMode === "business" ? [] : allVariableExpenses}
         categories={workspaceMode === "business" ? business.categories : categories}
         setCategories={setCategories}
         isBusinessMode={workspaceMode === "business"}
@@ -11488,12 +11496,6 @@ export default function ReveeNorthApp() {
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  const [localSaveFailed, setLocalSaveFailed] = useState(false);
-  useEffect(() => {
-    const onStorageError = () => setLocalSaveFailed(true);
-    window.addEventListener("reveenorth:storage-error", onStorageError);
-    return () => window.removeEventListener("reveenorth:storage-error", onStorageError);
-  }, []);
   const [onboardingComplete, setOnboardingComplete] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("reveenorth:onboarding-complete") === "true"
@@ -11513,7 +11515,7 @@ export default function ReveeNorthApp() {
   const [lastSavedAt, setLastSavedAt] = useState(() => {
     if (typeof window === "undefined") return new Date().toISOString();
     try {
-      const savedState = localStorage.getItem("reveenorth:app-state");
+      const savedState = readLocalCache("reveenorth:app-state");
       if (!savedState) return new Date().toISOString();
       return (JSON.parse(savedState) as Partial<ReveeNorthCloudState>).updatedAt ?? new Date().toISOString();
     } catch {
@@ -11653,10 +11655,10 @@ export default function ReveeNorthApp() {
 
   useEffect(() => {
     try {
-      const savedUser = localStorage.getItem("reveenorth:user");
+      const savedUser = readLocalCache("reveenorth:user");
       const savedBalance = localStorage.getItem("reveenorth:real-balance");
-      const savedCategories = localStorage.getItem("reveenorth:categories");
-      const savedState = localStorage.getItem("reveenorth:app-state");
+      const savedCategories = readLocalCache("reveenorth:categories");
+      const savedState = readLocalCache("reveenorth:app-state");
       const savedOnboarding = localStorage.getItem("reveenorth:onboarding-complete");
       const savedLoggedIn = localStorage.getItem("reveenorth:logged-in");
       const savedActiveView = localStorage.getItem("reveenorth:active-view");
@@ -11836,7 +11838,7 @@ export default function ReveeNorthApp() {
   ]);
 
   useEffect(() => {
-    setLocalSaveFailed(!writeLocalCache("reveenorth:app-state", JSON.stringify(cloudState)));
+    writeLocalCache("reveenorth:app-state", JSON.stringify(cloudState));
     if (!authSession || !cloudReady) return;
     const timeout = window.setTimeout(() => {
       saveCloudState(authSession, cloudState)
@@ -11850,7 +11852,7 @@ export default function ReveeNorthApp() {
     const updatedAt = new Date().toISOString();
     setLastSavedAt(updatedAt);
     const nextState = { ...cloudState, ...patch, updatedAt };
-    setLocalSaveFailed(!writeLocalCache("reveenorth:app-state", JSON.stringify(nextState)));
+    writeLocalCache("reveenorth:app-state", JSON.stringify(nextState));
     if (authSession && cloudReady) {
       saveCloudState(authSession, nextState)
         .then(() => setCloudError(null))
@@ -12717,7 +12719,6 @@ export default function ReveeNorthApp() {
         }`}
       >
         <div className="mx-auto max-w-7xl">
-          {localSaveFailed ? <p role="alert" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Não foi possível guardar a cópia neste navegador. {authSession && cloudReady ? "A sincronização com a nuvem continua; confira também os avisos de sincronização." : "Mantenha esta página aberta até conseguir salvar seus dados na nuvem."}</p> : null}
           {cloudError ? (
             <p role="alert" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
               {cloudError}
