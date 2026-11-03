@@ -1,5 +1,6 @@
 "use client";
 
+import { writeLocalCache } from "@/lib/browser-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
@@ -725,7 +726,7 @@ function getAccountCreatedAt() {
   const saved = localStorage.getItem("reveenorth:account-created-at");
   if (saved) return saved;
   const createdAt = getTodayKey();
-  localStorage.setItem("reveenorth:account-created-at", createdAt);
+  writeLocalCache("reveenorth:account-created-at", createdAt);
   return createdAt;
 }
 
@@ -1103,11 +1104,16 @@ function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string)
 
 function readFileAsDataUrl(file: File, maxSize = 320) {
   return new Promise<string>((resolve, reject) => {
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      reject(new Error("Escolha uma imagem de até 10 MB."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const raw = String(reader.result ?? "");
       const image = new Image();
       image.onload = () => {
+        try {
         const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
         const width = Math.max(1, Math.round(image.width * scale));
         const height = Math.max(1, Math.round(image.height * scale));
@@ -1116,13 +1122,16 @@ function readFileAsDataUrl(file: File, maxSize = 320) {
         canvas.height = height;
         const context = canvas.getContext("2d");
         if (!context) {
-          resolve(raw);
+          reject(new Error("Não foi possível preparar a imagem. Tente outra foto."));
           return;
         }
         context.drawImage(image, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
+        resolve(canvas.toDataURL("image/webp", 0.8));
+        } catch {
+          reject(new Error("Não foi possível preparar a imagem. Tente outra foto."));
+        }
       };
-      image.onerror = () => resolve(raw);
+      image.onerror = () => reject(new Error("Imagem inválida ou formato não suportado. Tente PNG, JPG ou WebP."));
       image.src = raw;
     };
     reader.onerror = () => reject(reader.error);
@@ -6400,6 +6409,7 @@ function AccountLogoInput({
   Icon: React.ElementType;
   onChange: (logoUrl: string) => void;
 }) {
+  const [imageError, setImageError] = useState<string | null>(null);
   return (
     <label className="group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full">
       <input
@@ -6408,9 +6418,14 @@ function AccountLogoInput({
         className="hidden"
         onChange={async (event) => {
           const file = event.target.files?.[0];
-          if (file) onChange(await readFileAsDataUrl(file));
+          event.target.value = "";
+          if (!file) return;
+          setImageError(null);
+          try { onChange(await readFileAsDataUrl(file)); }
+          catch (error) { setImageError(error instanceof Error ? error.message : "Não foi possível carregar a foto."); }
         }}
       />
+      {imageError ? <span role="alert" className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl bg-red-50 p-3 text-xs text-red-900 shadow-lg">{imageError}</span> : null}
       <SafeBillLogo
         logoUrl={logoUrl}
         className="h-11 w-11 rounded-full object-cover ring-1 ring-[#211d19]/8"
@@ -11460,6 +11475,12 @@ export default function ReveeNorthApp() {
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [localSaveFailed, setLocalSaveFailed] = useState(false);
+  useEffect(() => {
+    const onStorageError = () => setLocalSaveFailed(true);
+    window.addEventListener("reveenorth:storage-error", onStorageError);
+    return () => window.removeEventListener("reveenorth:storage-error", onStorageError);
+  }, []);
   const [onboardingComplete, setOnboardingComplete] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("reveenorth:onboarding-complete") === "true"
@@ -11590,7 +11611,7 @@ export default function ReveeNorthApp() {
     if (safeState.updatedAt) setLastSavedAt(safeState.updatedAt);
     if (safeState.accountCreatedAt) {
       setAccountCreatedAt(safeState.accountCreatedAt);
-      localStorage.setItem("reveenorth:account-created-at", safeState.accountCreatedAt);
+      writeLocalCache("reveenorth:account-created-at", safeState.accountCreatedAt);
     }
     if (safeState.user) setUser(safeState.user);
     if (safeState.realBalance) setRealBalance(safeState.realBalance);
@@ -11684,15 +11705,15 @@ export default function ReveeNorthApp() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("reveenorth:user", JSON.stringify(user));
+    writeLocalCache("reveenorth:user", JSON.stringify(user));
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem("reveenorth:active-view", active);
+    writeLocalCache("reveenorth:active-view", active);
   }, [active]);
 
   useEffect(() => {
-    localStorage.setItem("reveenorth:real-balance", JSON.stringify(realBalance));
+    writeLocalCache("reveenorth:real-balance", JSON.stringify(realBalance));
   }, [realBalance]);
 
   useEffect(() => {
@@ -11701,7 +11722,7 @@ export default function ReveeNorthApp() {
       setCategories(merged);
       return;
     }
-    localStorage.setItem("reveenorth:categories", JSON.stringify(categories));
+    writeLocalCache("reveenorth:categories", JSON.stringify(categories));
   }, [categories]);
 
   const payrollPersonalIncomes = useMemo(
@@ -11736,7 +11757,7 @@ export default function ReveeNorthApp() {
   const earliestDataMonth = workspaceMode === "business" ? earliestBusinessMonth : earliestPersonalMonth;
 
   useEffect(() => {
-    localStorage.setItem("reveenorth:account-created-at", accountCreatedAt);
+    writeLocalCache("reveenorth:account-created-at", accountCreatedAt);
     const options = buildMonthOptions(accountCreatedAt, earliestDataMonth);
     if (!options.some((option) => option.value === selectedMonth)) {
       setSelectedMonth(monthKey(getTodayKey()));
@@ -11802,12 +11823,12 @@ export default function ReveeNorthApp() {
   ]);
 
   useEffect(() => {
-    localStorage.setItem("reveenorth:app-state", JSON.stringify(cloudState));
+    setLocalSaveFailed(!writeLocalCache("reveenorth:app-state", JSON.stringify(cloudState)));
     if (!authSession || !cloudReady) return;
     const timeout = window.setTimeout(() => {
       saveCloudState(authSession, cloudState)
         .then(() => setCloudError(null))
-        .catch(() => setCloudError("As alterações estão salvas neste navegador, mas ainda não foram confirmadas na nuvem. Confira sua conexão e tente salvar novamente."));
+        .catch(() => setCloudError("Não foi possível confirmar o salvamento na nuvem. Mantenha esta página aberta, confira sua conexão e tente salvar novamente."));
     }, 700);
     return () => window.clearTimeout(timeout);
   }, [authSession, cloudReady, cloudState]);
@@ -11816,11 +11837,11 @@ export default function ReveeNorthApp() {
     const updatedAt = new Date().toISOString();
     setLastSavedAt(updatedAt);
     const nextState = { ...cloudState, ...patch, updatedAt };
-    localStorage.setItem("reveenorth:app-state", JSON.stringify(nextState));
+    setLocalSaveFailed(!writeLocalCache("reveenorth:app-state", JSON.stringify(nextState)));
     if (authSession && cloudReady) {
       saveCloudState(authSession, nextState)
         .then(() => setCloudError(null))
-        .catch(() => setCloudError("As alterações estão salvas neste navegador, mas ainda não foram confirmadas na nuvem. Confira sua conexão e tente salvar novamente."));
+        .catch(() => setCloudError("Não foi possível confirmar o salvamento na nuvem. Mantenha esta página aberta, confira sua conexão e tente salvar novamente."));
     }
   };
 
@@ -12518,8 +12539,8 @@ export default function ReveeNorthApp() {
   };
 
   const handleCompleteOnboarding = (answers: OnboardingData) => {
-    localStorage.setItem("reveenorth:onboarding", JSON.stringify(answers));
-    localStorage.setItem("reveenorth:onboarding-complete", "true");
+    writeLocalCache("reveenorth:onboarding", JSON.stringify(answers));
+    writeLocalCache("reveenorth:onboarding-complete", "true");
     setPreferences((current) => ({
       ...current,
       minimumReserve: answers.hasReserve === "Sim" ? Math.max(300, answers.reserveAmount) : current.minimumReserve,
@@ -12563,7 +12584,7 @@ export default function ReveeNorthApp() {
       setAuthSession(session);
       setCloudReady(false);
       setCloudError(null);
-      localStorage.setItem("reveenorth:logged-in", "true");
+      writeLocalCache("reveenorth:logged-in", "true");
       if (startOnboarding) {
         const createdAt = getTodayKey();
         setAccountCreatedAt(createdAt);
@@ -12572,7 +12593,7 @@ export default function ReveeNorthApp() {
         setIncomes([]);
         setGoals([]);
         setObjectives([]);
-        localStorage.setItem("reveenorth:account-created-at", createdAt);
+        writeLocalCache("reveenorth:account-created-at", createdAt);
         localStorage.removeItem("reveenorth:onboarding");
         localStorage.removeItem("reveenorth:onboarding-complete");
         setOnboardingComplete(false);
@@ -12683,6 +12704,7 @@ export default function ReveeNorthApp() {
         }`}
       >
         <div className="mx-auto max-w-7xl">
+          {localSaveFailed ? <p role="alert" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Não foi possível guardar a cópia neste navegador. {authSession && cloudReady ? "A sincronização com a nuvem continua; confira também os avisos de sincronização." : "Mantenha esta página aberta até conseguir salvar seus dados na nuvem."}</p> : null}
           {cloudError ? (
             <p role="alert" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
               {cloudError}
