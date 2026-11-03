@@ -75,3 +75,32 @@ test('bill summary counts payments in their payment month, including old debts p
  assert.equal(c.totalPaid,220);assert.equal(c.totalMissing,50);assert.equal(c.totalOverall,270);
  assert.equal(c.paidThisMonth.length+c.pendingOrOverdueBills.length,2);
 });
+
+test('indefinite series with missing original root continues through all of next year without duplicates',()=>{
+ const original=[{...child,id:10,name:'Água',dueDate:'2026-11-22',expectedAmount:254.67},{...child,id:11,name:'Água',dueDate:'2026-12-22',expectedAmount:254.67}];
+ const a=app(original);const result=a.ensureFixedBillInstances(a.bills,'2026-01-01');
+ assert.equal(result.filter(b=>b.dueDate.startsWith('2027')).length,12);
+ assert.ok(result.some(b=>b.dueDate==='2027-12-22'&&b.name==='Água'));
+ assert.equal(result.find(b=>b.id===10).expectedAmount,254.67);
+ assert.equal(a.ensureFixedBillInstances(result,'2026-01-01').length,result.length);
+ const stopped=a.removeBillsAndFutureRepeats(result,[11],'2026-01-01');
+ assert.equal(stopped.length,1);
+ assert.equal(a.ensureFixedBillInstances(stopped,'2026-01-01').length,1);
+});
+test('existing finite root prevents recovery from extending its children forever',()=>{
+ const a=app([{...root,repeatMonths:2},child]);
+ const result=a.ensureFixedBillInstances(a.bills,'2026-01-01');
+ assert.equal(result.length,2);
+});
+test('an orphan finite series is not guessed to be indefinite',()=>{
+ const a=app([{...child,repeatMonths:2}]);
+ assert.equal(a.ensureFixedBillInstances(a.bills,'2026-01-01').length,1);
+});
+
+test('indefinite recurrence advances again when the calendar moves to the following year',()=>{
+ const a=app([root]); const first=a.ensureFixedBillInstances(a.bills,'2026-01-01');
+ a.getTodayKey=()=> '2027-11-02';
+ const next=a.ensureFixedBillInstances(first,'2026-01-01');
+ assert.equal(next.filter(b=>b.dueDate.startsWith('2028')).length,12);
+ assert.equal(new Set(next.map(b=>b.recurrenceId+':'+b.dueDate.slice(0,7))).size,next.length);
+});

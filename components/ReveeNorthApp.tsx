@@ -732,7 +732,7 @@ function getAccountCreatedAt() {
 
 function buildMonthOptions(accountCreatedAt: string, earliestMonth?: string) {
   const startMonth = earliestMonth && earliestMonth < monthKey(accountCreatedAt) ? earliestMonth : monthKey(accountCreatedAt);
-  const endMonth = addMonths(monthKey(getTodayKey()), 3);
+  const endMonth = `${Number(getTodayKey().slice(0, 4)) + 1}-12`;
   const options: { value: string; label: string }[] = [];
   for (let value = startMonth; value <= endMonth; value = addMonths(value, 1)) {
     options.push({ value, label: monthLabel(value) });
@@ -1037,6 +1037,7 @@ function stopBillRecurrenceFromMonth(
 }
 
 function removeBillsAndFutureRepeats(sourceBills: Bill[], ids: number[], accountCreatedAt: string) {
+  sourceBills = ensureFixedBillInstances(sourceBills, accountCreatedAt);
   const selected = sourceBills.filter((bill) => ids.includes(bill.id));
   const recurrenceStops = selected.reduce<Map<string, string>>((acc, bill) => {
     const key = billRecurrenceKey(bill);
@@ -1057,8 +1058,20 @@ function removeBillsAndFutureRepeats(sourceBills: Bill[], ids: number[], account
 }
 
 function ensureFixedBillInstances(sourceBills: Bill[], accountCreatedAt: string) {
-  const horizon = addMonths(monthKey(getTodayKey()), 3);
-  const nextBills = [...sourceBills];
+  const horizon = `${Number(getTodayKey().slice(0, 4)) + 1}-12`;
+  // Recover indefinite series imported without their original root. A real root
+  // always takes precedence, including one with a deliberate stop date.
+  const rootKeys = new Set(sourceBills.filter((bill) => bill.fixed && bill.generatedFromId === undefined).map(billRecurrenceKey));
+  const recovered = new Map<string, Bill>();
+  for (const bill of sourceBills) {
+    const key = billRecurrenceKey(bill);
+    if (!key || rootKeys.has(key) || !bill.fixed || (bill.repeatMonths !== undefined && bill.repeatMonths !== "indefinido")) continue;
+    const previous = recovered.get(key);
+    if (!previous || bill.dueDate < previous.dueDate) recovered.set(key, bill);
+  }
+  const nextBills = sourceBills.map((bill) => recovered.get(billRecurrenceKey(bill) ?? "")?.id === bill.id
+    ? { ...bill, generatedFromId: undefined }
+    : bill);
   const existingKeys = new Set(
     nextBills.map((bill) => `${bill.recurrenceId ?? bill.id}:${monthKey(bill.dueDate)}`),
   );
